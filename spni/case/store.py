@@ -96,7 +96,11 @@ class Case:
     # ── extractions ─────────────────────────────────────────────────────
     def create_extraction(self, device: dict[str, Any], method: str, examiner: str = "") -> "Extraction":
         stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-        ext_id = f"{stamp}_{safe_name(device.get('serial') or 'device')[:24]}"
+        base = f"{stamp}_{safe_name(device.get('serial') or 'device')[:24]}"
+        ext_id, n = base, 1
+        while (self.path / "extractions" / ext_id).exists():  # same source twice within a second
+            n += 1
+            ext_id = f"{base}-{n}"
         folder = self.path / "extractions" / ext_id
         for sub in ("raw", "media", "thumbs"):
             (folder / sub).mkdir(parents=True, exist_ok=True)

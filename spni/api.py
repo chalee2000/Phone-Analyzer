@@ -452,6 +452,20 @@ class Api:
             return None
         return str(res[0] if isinstance(res, (list, tuple)) else res)
 
+    @endpoint
+    def choose_files(self, purpose: str = "messenger") -> list[str] | None:
+        """Native multi-file picker (desktop only; the dev server has no window)."""
+        if not self._window:
+            return None
+        import webview
+
+        kind = getattr(getattr(webview, "FileDialog", None), "OPEN", None) or webview.OPEN_DIALOG
+        types = ("Facebook / Messenger export (*.zip;*.json)", "All files (*.*)")
+        res = self._window.create_file_dialog(kind, allow_multiple=True, file_types=types)
+        if not res:
+            return None
+        return [str(p) for p in (res if isinstance(res, (list, tuple)) else [res])]
+
     # ── forensic report ──────────────────────────────────────────────────
     @endpoint
     def report_defaults(self) -> dict[str, Any]:
@@ -652,3 +666,78 @@ class Api:
 
         data = cdr.demo_cdr_bytes(DEMO_ANDROID_NUMBER, cdr_partners())
         return self._import_cdr(f"demo_cdr_{DEMO_ANDROID_NUMBER}.csv", data)
+
+    # ── Messenger (Facebook data export) ────────────────────────────────
+    def _uploads(self) -> Path:
+        folder = self._store.root / ".uploads" / uuid.uuid4().hex[:12]
+        folder.mkdir(parents=True, exist_ok=True)
+        return folder
+
+    @staticmethod
+    def _input_paths(paths: list[str] | str) -> list[str]:
+        items = [paths] if isinstance(paths, str) else list(paths or [])
+        if not items:
+            raise ApiError("fb_no_messages")
+        for p in items:
+            if not isinstance(p, str) or not Path(p).exists():
+                raise ApiError("not_found", str(p))
+        return items
+
+    @endpoint
+    def messenger_upload(self, name: str, data_b64: str) -> str:
+        """Browser / dev-server path: store an uploaded export so it can be read by path."""
+        import base64
+
+        from .util import safe_name
+
+        dest = self._uploads() / safe_name(Path(name).name, "upload")
+        dest.write_bytes(base64.b64decode(data_b64.split(",", 1)[-1]))
+        return str(dest)
+
+    @endpoint
+    def messenger_preview(self, paths: list[str]) -> dict[str, Any]:
+        from . import messenger
+
+        return messenger.preview(self._input_paths(paths))
+
+    def _import_messenger(self, paths: list[str], owner: str) -> dict[str, Any]:
+        from . import messenger
+
+        with self._lock:
+            if self._job or self._reporting:
+                raise ApiError("busy")
+            case = self._ensure_case()
+            self._reporting = True
+        try:
+            result = messenger.import_into(
+                case, paths, owner,
+                progress=lambda step, frac: self._bus.emit("import.progress", {"step": step, "progress": round(frac, 3)}),
+            )
+        finally:
+            self._reporting = False
+        if not self._extraction_id:
+            self._extraction_id = result["extraction_id"]
+        result["case_id"] = case.id
+        self._bus.emit("case.opened", case.meta())
+        return result
+
+    @endpoint
+    def messenger_import(self, paths: list[str], owner: str = "") -> dict[str, Any]:
+        return self._import_messenger(self._input_paths(paths), owner)
+
+    @endpoint
+    def messenger_demo_files(self) -> list[str]:
+        """Write the demo export (DYI zip + secure-storage zip) and return their paths."""
+        from . import messenger
+
+        folder = self._uploads()
+        out = []
+        for name, data in messenger.demo_export():
+            (folder / name).write_bytes(data)
+            out.append(str(folder / name))
+        return out
+
+    @endpoint
+    def import_demo_messenger(self) -> dict[str, Any]:
+        paths = self.messenger_demo_files()["data"]
+        return self._import_messenger(paths, "")
