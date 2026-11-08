@@ -25,7 +25,7 @@ from reportlab.platypus import (
     TableStyle,
 )
 
-from .. import __version__
+from .. import APP_NAME, __version__
 from ..models import ALL_KINDS
 from ..paths import font
 from . import report_name
@@ -130,21 +130,19 @@ def build(*, case, extraction, records, files, ext_dir: Path, out_dir: Path, lan
         canvas.setFillColor(GOLD)
         canvas.rect(0, h - 11.8 * mm, w, 0.8 * mm, stroke=0, fill=1)
         canvas.setFont("Sarabun-Bold", 10.5)
-        canvas.setFillColor(GOLD)
-        canvas.drawString(MARGIN, h - 7.2 * mm, "SPNI")
         canvas.setFillColor(colors.white)
-        canvas.drawString(MARGIN + 9.5 * mm, h - 7.2 * mm, "Phone Analysis")
+        canvas.drawString(MARGIN, h - 7.2 * mm, APP_NAME)
         canvas.setFont("Sarabun", 8.5)
         canvas.drawRightString(w - MARGIN, h - 7.2 * mm, f"{'คดี' if th else 'Case'} {case_label}  ·  {device.get('market_name') or device.get('model', '')}")
         canvas.setFillColor(MUTED)
         canvas.setFont("Sarabun", 7.5)
-        canvas.drawString(MARGIN, 7 * mm, f"SPNI Phone Analysis v{__version__}  ·  {extraction.get('id', '')}")
+        canvas.drawString(MARGIN, 7 * mm, f"{APP_NAME} v{__version__}  ·  {extraction.get('id', '')}")
         canvas.drawRightString(w - MARGIN, 7 * mm, f"{'หน้า' if th else 'Page'} {doc.page}")
         canvas.restoreState()
 
     doc = SimpleDocTemplate(str(path), pagesize=PAGE, leftMargin=MARGIN, rightMargin=MARGIN,
                             topMargin=18 * mm, bottomMargin=13 * mm,
-                            title="SPNI Phone Analysis Report", author=case.get("investigator", ""))
+                            title=f"{APP_NAME} Report", author=case.get("investigator", ""))
     story: list[Any] = []
     story.append(Paragraph("รายงานการสกัดข้อมูลโทรศัพท์มือถือ" if th else "Mobile Device Extraction Report", st["title"]))
     sub = f"{'จัดทำเมื่อ' if th else 'Generated'} {thai_date() if th else fmt_dt(time.time() * 1000)}"

@@ -25,7 +25,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Iterable
 
-from .. import __version__
+from .. import APP_NAME, __version__
 from ..util import iso_now, safe_name, sha256_file
 
 SCHEMA = """
@@ -54,7 +54,7 @@ def default_cases_root() -> Path:
     if env:
         return Path(env)
     docs = Path.home() / "Documents"
-    return (docs if docs.is_dir() else Path.home()) / "SPNI Cases"
+    return (docs if docs.is_dir() else Path.home()) / "Phone Analysis Cases"
 
 
 class Case:
@@ -114,7 +114,7 @@ class Case:
             )
             self.db.commit()
         ext = Extraction(self, ext_id, folder)
-        ext.audit("extraction.start", f"SPNI Phone Analysis v{__version__}; method={method}")
+        ext.audit("extraction.start", f"{APP_NAME} v{__version__}; method={method}")
         return ext
 
     def get_extraction(self, ext_id: str) -> "Extraction":
@@ -297,7 +297,7 @@ class Extraction:
     def write_manifest(self) -> Path:
         info = self.case.extraction_info(self.id)
         manifest = {
-            "tool": f"SPNI Phone Analysis v{__version__}",
+            "tool": f"{APP_NAME} v{__version__}",
             "case": self.case.meta(),
             "extraction": {k: info[k] for k in ("id", "started", "finished", "status", "method", "examiner")},
             "device": info["device"],

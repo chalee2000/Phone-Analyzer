@@ -37,7 +37,7 @@ export function TitleBar() {
         <LogoMark className="size-11 drop-shadow-[0_4px_10px_rgba(224,168,46,0.35)]" />
         <div className="leading-tight">
           <div className="font-display text-[23px] font-semibold tracking-tight">
-            <span className="gold-text">SPNI</span> Phone Analysis
+            Phone Analysis
           </div>
           <div className="mt-0.5 flex items-center gap-2 text-[12px] text-white/65">
             <span>{t("app.subtitle")}</span>

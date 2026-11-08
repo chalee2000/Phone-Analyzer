@@ -299,7 +299,7 @@ export function AboutDialog() {
       <div className="titlebar-pattern flex flex-col items-center px-8 pt-10 pb-8 text-center text-white">
         <LogoMark className="size-20" />
         <div className="mt-4 font-display text-[26px] font-semibold">
-          <span className="gold-text">SPNI</span> Phone Analysis
+          Phone Analysis
         </div>
         <div className="tabular mt-1 text-white/60">v{info?.version}</div>
       </div>

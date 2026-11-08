@@ -16,7 +16,7 @@ from docx.oxml.ns import qn
 from docx.shared import Cm, Pt, RGBColor
 from PIL import Image, ImageOps
 
-from .. import __version__
+from .. import APP_NAME, __version__
 from . import report_name
 from .labels import fmt_dt, thai_date
 
@@ -97,7 +97,7 @@ def build_photos(*, case, extraction, records, ext_dir: Path, out_dir: Path, lan
             p.paragraph_format.space_after = Pt(0)
             _font(p.add_run(f"{k}: "), 15, True, NAVY)
             _font(p.add_run(str(v)), 15)
-    _para(doc, f"SPNI Phone Analysis v{__version__}", 11, False, GOLD)
+    _para(doc, f"{APP_NAME} v{__version__}", 11, False, GOLD)
 
     cols = 2
     table = doc.add_table(rows=0, cols=cols)

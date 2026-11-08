@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  SPNI helper app. Installed temporarily by SPNI Phone Analysis over ADB only
+  Phone Analysis helper app. Installed temporarily by Phone Analysis over ADB only
   when the examiner allows it, and uninstalled right after the export.
   It has no network permission: data never leaves the device except through
   the USB connection to the examiner's computer.

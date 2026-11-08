@@ -12,7 +12,7 @@ from ..util import safe_name
 def report_name(case: dict[str, Any], extraction: dict[str, Any], suffix: str, ext: str) -> str:
     label = case.get("case_no") or case.get("title") or "report"
     device = extraction.get("model") or extraction.get("serial") or "device"
-    return safe_name(f"SPNI_{label}_{device}_{suffix}_{datetime.now():%Y%m%d-%H%M%S}") + ext
+    return safe_name(f"PhoneAnalysis_{label}_{device}_{suffix}_{datetime.now():%Y%m%d-%H%M%S}") + ext
 
 
 def export_report(fmt: str, **kw: Any) -> Path:

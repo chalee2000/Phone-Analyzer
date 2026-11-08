@@ -1,4 +1,4 @@
-"""Draw the SPNI app icon (gold tile, phone, magnifier) → resources/icon.ico + icon.png."""
+"""Draw the Phone Analysis app icon (gold tile, phone, magnifier) → resources/icon.ico + icon.png."""
 
 from pathlib import Path
 

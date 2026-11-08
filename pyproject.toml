@@ -1,7 +1,7 @@
 [project]
 name = "spni-phone-analysis"
 version = "4.0.0"
-description = "SPNI Phone Analysis — ระบบสกัดและวิเคราะห์พยานหลักฐานจากโทรศัพท์มือถือ (Android / iOS)"
+description = "Phone Analysis — ระบบสกัดและวิเคราะห์พยานหลักฐานจากโทรศัพท์มือถือ (Android / iOS)"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [

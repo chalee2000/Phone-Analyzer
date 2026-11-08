@@ -59,7 +59,7 @@ def main() -> None:
             pass
 
     bus.subscribe(forward)
-    storage = Path(os.environ.get("APPDATA", Path.home())) / "SPNI Phone Analysis" / "webview"
+    storage = Path(os.environ.get("APPDATA", Path.home())) / APP_NAME / "webview"
     webview.start(debug=args.debug, http_server=not args.dev, private_mode=False, storage_path=str(storage))
     media.stop()
 

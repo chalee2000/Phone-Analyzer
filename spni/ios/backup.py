@@ -49,7 +49,7 @@ async def make_backup(
             raise BackupPasswordRequired()
         audit("ios.backup.encrypted", "device encrypts backups; examiner supplied the password")
     elif allow_temporary_encryption:
-        password = "SPNI-" + secrets.token_hex(6)
+        password = "PA-" + secrets.token_hex(6)
         audit("ios.backup.temp_password.set", f"temporary backup password: {password}")
         await svc.change_password(dest, new=password)
         encrypted = temporary = True

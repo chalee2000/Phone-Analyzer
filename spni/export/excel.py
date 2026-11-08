@@ -9,7 +9,7 @@ from openpyxl import Workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 
-from .. import __version__
+from .. import APP_NAME, __version__
 from ..models import ALL_KINDS
 from . import report_name
 from .labels import KIND_LABELS, UNAVAILABLE, columns, device_rows, fmt_iso, header
@@ -61,7 +61,7 @@ def build(*, case, extraction, records, files, out_dir: Path, lang: str = "th", 
     ws.sheet_view.showGridLines = False
     ws["A1"] = "รายงานการสกัดข้อมูลโทรศัพท์มือถือ" if th else "Mobile Device Extraction Report"
     ws["A1"].font = Font(name=FONT, size=16, bold=True, color=NAVY)
-    ws["A2"] = f"SPNI Phone Analysis v{__version__}"
+    ws["A2"] = f"{APP_NAME} v{__version__}"
     ws["A2"].font = Font(name=FONT, size=10, color=GOLD, bold=True)
 
     case_rows = [

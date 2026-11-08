@@ -1,6 +1,6 @@
 import type { SVGProps } from "react";
 
-/** SPNI mark: a phone under a magnifying lens, drawn for this app. */
+/** App mark: a phone under a magnifying lens, drawn for this app. */
 export function LogoMark({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 48 48" className={className} aria-hidden>

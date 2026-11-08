@@ -1,4 +1,4 @@
-# SPNI Phone Analysis v4
+# Phone Analysis v4
 
 ระบบสกัดและวิเคราะห์พยานหลักฐานจากโทรศัพท์มือถือ **Android** และ **iPhone (iOS)** สำหรับ Windows
 พร้อมหน้าจอใหม่ทั้งหมด รองรับภาษาไทย / English และโหมดสว่าง / มืด
@@ -25,7 +25,7 @@
 | แอป | `dumpsys package` | installation_proxy |
 
 * **รายงาน**: Excel (ทุกหมวด + ค่าแฮช), PDF ภาษาไทย (ฟอนต์ Sarabun), รูปภาพเป็น Word (พร้อมวันที่ถ่าย พิกัด SHA-256)
-* **คดี**: ทุกการสกัดถูกเก็บในโฟลเดอร์คดี (`Documents\SPNI Cases`) พร้อม SQLite, `manifest.json` (SHA-256 ทุกไฟล์) และ `audit.log` บันทึกทุกคำสั่งที่ส่งไปยังเครื่อง
+* **คดี**: ทุกการสกัดถูกเก็บในโฟลเดอร์คดี (`Documents\Phone Analysis Cases`) พร้อม SQLite, `manifest.json` (SHA-256 ทุกไฟล์) และ `audit.log` บันทึกทุกคำสั่งที่ส่งไปยังเครื่อง
 * **วินิจฉัยการเชื่อมต่อ**: ภาพเคลื่อนไหวสอนเปิด USB debugging แยกตามยี่ห้อ (Samsung, Xiaomi, OPPO, realme, vivo, HUAWEI, HONOR, Pixel) และ iPhone พร้อมตรวจสถานะ ADB / ไดรเวอร์ / Apple Mobile Device Service จริง
 * **โหมดสาธิต**: อุปกรณ์จำลอง Android และ iPhone พร้อมข้อมูลภาษาไทยสังเคราะห์ ใช้ฝึกอบรมหรือทดสอบได้โดยไม่ต้องมีเครื่องจริง (`--demo` หรือเมนู เพิ่มเติม → โหมดสาธิต)
 * รอบถัดไป: ไทม์ไลน์ ส่งออก i2 ผังความเชื่อมโยง เชื่อมโยงข้ามเครื่อง วิเคราะห์ CDR ฐานข้อมูลเบอร์โทร (ปุ่มแสดง “เร็ว ๆ นี้”)
@@ -39,7 +39,7 @@
 
 ## ติดตั้งบนเครื่อง Windows
 
-ดาวน์โหลดไฟล์ที่ build แล้วจาก GitHub Actions (artifact `SPNI-Phone-Analysis-windows`) แล้วเปิด `SPNI Phone Analysis.exe`
+ดาวน์โหลดไฟล์ที่ build แล้วจาก GitHub Actions (artifact `Phone-Analysis-windows`) แล้วเปิด `Phone Analysis.exe`
 
 * **Android**: ไม่ต้องติดตั้งเพิ่ม (มี adb ในตัว) หากเครื่องไม่ขึ้น ให้ติดตั้งไดรเวอร์ USB ของยี่ห้อนั้น
 * **iPhone**: ติดตั้ง **Apple Devices** (Microsoft Store) หรือ **iTunes** เพื่อให้มี Apple Mobile Device Service
@@ -108,7 +108,7 @@ spni.spec          PyInstaller
 
 ## English summary
 
-SPNI Phone Analysis v4 is a Windows desktop tool (Python + pywebview + React) for logical extraction of
+Phone Analysis v4 is a Windows desktop tool (Python + pywebview + React) for logical extraction of
 Android phones over ADB and iPhones through iTunes-format backups. It stores every extraction in a case
 folder with SHA-256 hashes and an audit log of every command sent to the device, and exports Excel, Thai
 PDF and photos-to-Word reports. An animated, brand-specific connection guide helps examiners enable USB

@@ -1,5 +1,5 @@
 # -*- mode: python ; coding: utf-8 -*-
-# PyInstaller spec for SPNI Phone Analysis (Windows, one-folder build).
+# PyInstaller spec for Phone Analysis (Windows, one-folder build).
 #   cd frontend && npm ci && npm run build && cd ..
 #   pyinstaller spni.spec --noconfirm
 # Optional extras picked up when present:
@@ -44,9 +44,9 @@ exe = EXE(
     a.scripts,
     [],
     exclude_binaries=True,
-    name="SPNI Phone Analysis",
+    name="Phone Analysis",
     icon="resources/icon.ico",
     console=False,
     version=None,
 )
-coll = COLLECT(exe, a.binaries, a.datas, name="SPNI Phone Analysis")
+coll = COLLECT(exe, a.binaries, a.datas, name="Phone Analysis")

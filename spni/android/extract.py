@@ -4,7 +4,7 @@ Strategy per category:
 
 * calls / contacts / SMS — ``content query`` against the system providers.
   Android 10+ (and MIUI/HyperOS in particular) often refuses this for the
-  shell user; those categories then fall back to the SPNI helper app
+  shell user; those categories then fall back to the helper app
   (:mod:`spni.android.agent`) when the examiner allowed it.
 * apps — ``dumpsys package packages``
 * Wi-Fi — ``cmd wifi list-networks`` (Android 11+) or ``dumpsys wifi``

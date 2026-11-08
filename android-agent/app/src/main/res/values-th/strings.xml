@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">SPNI Agent</string>
-    <string name="exporting">SPNI Phone Analysis กำลังส่งออกข้อมูลผ่านสาย USB…</string>
-    <string name="please_allow">กด “อนุญาต” เพื่อให้ SPNI Phone Analysis อ่านรายชื่อ ประวัติการโทร และ SMS</string>
+    <string name="app_name">Phone Analysis Agent</string>
+    <string name="exporting">Phone Analysis กำลังส่งออกข้อมูลผ่านสาย USB…</string>
+    <string name="please_allow">กด “อนุญาต” เพื่อให้ Phone Analysis อ่านรายชื่อ ประวัติการโทร และ SMS</string>
     <string name="done">ส่งออกข้อมูลเสร็จแล้ว แอปนี้จะถูกถอนการติดตั้งอัตโนมัติ</string>
 </resources>

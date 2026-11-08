@@ -1,4 +1,4 @@
-"""SPNI helper app ("agent") for Android 10+ devices.
+"""Phone Analysis helper app ("agent") for Android 10+ devices.
 
 When the system providers refuse ``content query`` for the shell user, the
 examiner may allow a temporary helper app. The flow is fully logged:

@@ -106,7 +106,7 @@ def make_server(api: Api, bus: EventBus, port: int) -> ThreadingHTTPServer:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="SPNI Phone Analysis development server")
+    parser = argparse.ArgumentParser(description="Phone Analysis development server")
     parser.add_argument("--port", type=int, default=int(os.environ.get("SPNI_DEVSERVER_PORT", 8765)))
     parser.add_argument("--demo", action="store_true", help="show the demo devices")
     parser.add_argument("--cases", type=Path, default=None, help="cases folder")
@@ -117,7 +117,7 @@ def main() -> None:
     media.start()
     api._set_media_base(media.base_url)
     server = make_server(api, bus, args.port)
-    print(f"SPNI devserver on http://127.0.0.1:{args.port}  (cases: {api._cases_root})", flush=True)
+    print(f"Phone Analysis devserver on http://127.0.0.1:{args.port}  (cases: {api._cases_root})", flush=True)
     try:
         server.serve_forever()
     except KeyboardInterrupt:

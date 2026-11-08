@@ -17,7 +17,7 @@ import java.io.File
 
 /**
  * Exports contacts, call log and SMS to JSON files in the app's external files
- * folder (Android/data/th.spni.agent/files/export). SPNI Phone Analysis pulls
+ * folder (Android/data/th.spni.agent/files/export). Phone Analysis pulls
  * them over ADB and then uninstalls this app, which removes the files too.
  *
  * Started with: am start -n th.spni.agent/.ExportActivity --es kinds contacts,calls,sms

@@ -43,7 +43,7 @@ export function StatusBar() {
         <ShieldCheck className="size-3.5 text-emerald-300" /> SHA-256
       </span>
       <span className="tabular text-white/60">
-        SPNI Phone Analysis v{info?.version ?? "4.0.0"} &nbsp;|&nbsp; {fmtDateTime(now).slice(0, 16)}
+        Phone Analysis v{info?.version ?? "4.0.0"} &nbsp;|&nbsp; {fmtDateTime(now).slice(0, 16)}
       </span>
     </footer>
   );

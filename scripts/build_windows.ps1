@@ -1,4 +1,4 @@
-# Build "SPNI Phone Analysis" for Windows on a Windows machine.
+# Build "Phone Analysis" for Windows on a Windows machine.
 #   powershell -ExecutionPolicy Bypass -File scripts\build_windows.ps1
 # Needs: Python 3.12, Node.js 20+, internet access (npm, PyPI, dl.google.com).
 $ErrorActionPreference = "Stop"
@@ -28,4 +28,4 @@ if (-not (Test-Path "resources\agent\spni-agent.apk")) {
 
 Write-Host "== PyInstaller ==" -ForegroundColor Yellow
 .\.venv\Scripts\pyinstaller spni.spec --noconfirm
-Write-Host "Done: dist\SPNI Phone Analysis\SPNI Phone Analysis.exe" -ForegroundColor Green
+Write-Host "Done: dist\Phone Analysis\Phone Analysis.exe" -ForegroundColor Green
