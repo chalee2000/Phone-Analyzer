@@ -17,8 +17,14 @@ import { DeviceView } from "./views/DeviceView";
 import { ChatsView, SmsView } from "./views/MessagesView";
 import { AppsView, NotesView, SimView, VoiceView, WebView, WifiView } from "./views/MiscViews";
 import { PhotosView } from "./views/PhotosView";
+import { NetworkView } from "./views/NetworkView";
+import { TimelineView } from "./views/TimelineView";
+import { CommsView } from "./views/CommsView";
 
 const VIEWS: Record<Exclude<Tab, "device">, () => React.ReactNode> = {
+  network: NetworkView,
+  timeline: TimelineView,
+  comms: CommsView,
   calls: CallsView,
   contacts: ContactsView,
   sms: SmsView,

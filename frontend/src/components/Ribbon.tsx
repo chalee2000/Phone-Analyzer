@@ -42,12 +42,13 @@ function useRibbonSize(): Size {
 }
 
 /** Compact two-row grid used for the analysis tools on narrower windows. */
-function MiniButton({ icon, label, tone, iconOnly }: { icon: ReactNode; label: string; tone: string; iconOnly: boolean }) {
+function MiniButton({ icon, label, tone, iconOnly, onClick, soon, testId }: { icon: ReactNode; label: string; tone: string; iconOnly: boolean; onClick?: () => void; soon?: boolean; testId?: string }) {
   const { t } = useI18n();
   return (
-    <Tooltip label={iconOnly ? `${label} · ${t("rb.soon")}` : undefined}>
+    <Tooltip label={iconOnly ? (soon ? `${label} · ${t("rb.soon")}` : label) : undefined}>
       <button
-        onClick={() => toast(t("rb.soon.toast"), { icon: <Sparkles className="size-4 text-gold-500" /> })}
+        data-testid={testId}
+        onClick={soon || !onClick ? () => toast(t("rb.soon.toast"), { icon: <Sparkles className="size-4 text-gold-500" /> }) : onClick}
         className={clsx(
           "focus-ring group relative flex h-[36px] items-center gap-2 rounded-xl text-left transition hover:bg-surface-2",
           iconOnly ? "w-[42px] justify-center" : "w-[124px] px-1.5",
@@ -55,7 +56,7 @@ function MiniButton({ icon, label, tone, iconOnly }: { icon: ReactNode; label: s
       >
         <span className={clsx("grid size-[28px] shrink-0 place-items-center rounded-lg ring-1", TONES[tone])}>{icon}</span>
         {!iconOnly && <span className="truncate text-[12px] font-medium text-ink-2">{label}</span>}
-        <span className="absolute top-1 right-1 size-1.5 rounded-full bg-gold-400" />
+        {soon && <span className="absolute top-1 right-1 size-1.5 rounded-full bg-gold-400" />}
       </button>
     </Tooltip>
   );
@@ -232,18 +233,28 @@ function MoreMenu({ size }: { size: Size }) {
 
 export function Ribbon() {
   const { t, lang } = useI18n();
-  const { state, scan, scanning, openDialog, exportReport, job, platform } = useStore();
+  const { state, scan, scanning, openDialog, exportReport, job, platform, setTab, exportNetwork } = useStore();
   const connected = !!state.device && !state.device.offline;
   const running = state.running || (!!job && !job.finishedAt);
   const hasData = !!state.extraction;
   const size = useRibbonSize();
-  const analysis: [ReactNode, string, string][] = [
-    [<Share2 className="size-[18px]" />, t("rb.i2"), "orange"],
-    [<ChartColumnBig className="size-[18px]" />, t("rb.timeline"), "blue"],
-    [<Link2 className="size-[18px]" />, t("rb.link"), "indigo"],
-    [<Network className="size-[18px]" />, t("rb.pattern"), "amber"],
-    [<GitMerge className="size-[18px]" />, t("rb.cross"), "violet"],
-    [<PhoneCall className="size-[18px]" />, t("rb.cdr"), "teal"],
+  const hasCase = !!state.case;
+  const analysis: { icon: ReactNode; label: string; tone: string; onClick?: () => void; soon?: boolean; id: string }[] = [
+    { id: "i2", icon: <Share2 className="size-[18px]" />, label: t("rb.i2"), tone: "orange", onClick: () => (hasCase ? void exportNetwork("anx") : openDialog("cases")) },
+    { id: "timeline", icon: <ChartColumnBig className="size-[18px]" />, label: t("rb.timeline"), tone: "blue", onClick: () => setTab("timeline") },
+    { id: "link", icon: <Link2 className="size-[18px]" />, label: t("rb.link"), tone: "indigo", soon: true },
+    { id: "pattern", icon: <Network className="size-[18px]" />, label: t("rb.pattern"), tone: "amber", onClick: () => setTab("comms") },
+    { id: "cross", icon: <GitMerge className="size-[18px]" />, label: t("rb.cross"), tone: "violet", onClick: () => setTab("network") },
+    {
+      id: "cdr",
+      icon: <PhoneCall className="size-[18px]" />,
+      label: t("rb.cdr"),
+      tone: "teal",
+      onClick: () => {
+        setTab("comms");
+        window.dispatchEvent(new Event("spni:cdr-import"));
+      },
+    },
   ];
 
   return (
@@ -267,11 +278,11 @@ export function Ribbon() {
 
       <Group title={t("group.analysis")}>
         {size === "lg" ? (
-          analysis.map(([icon, label, tone]) => <RButton size={size} key={label} icon={icon} label={label} tone={tone} soon />)
+          analysis.map((a) => <RButton size={size} key={a.id} icon={a.icon} label={a.label} tone={a.tone} soon={a.soon} onClick={a.onClick} testId={`rb-${a.id}`} />)
         ) : (
           <div className="grid grid-flow-col grid-rows-2 gap-x-0.5 gap-y-1 py-0.5">
-            {analysis.map(([icon, label, tone]) => (
-              <MiniButton key={label} icon={icon} label={label} tone={tone} iconOnly={size === "sm"} />
+            {analysis.map((a) => (
+              <MiniButton key={a.id} icon={a.icon} label={a.label} tone={a.tone} iconOnly={size === "sm"} onClick={a.onClick} soon={a.soon} testId={`rb-${a.id}`} />
             ))}
           </div>
         )}

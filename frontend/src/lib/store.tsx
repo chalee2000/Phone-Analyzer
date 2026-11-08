@@ -4,7 +4,7 @@ import { ApiError, call, subscribe } from "./bridge";
 import { useI18n } from "./i18n";
 import type { AppInfo, AppState, Kind, Platform, ScannedDevice, StepEvent } from "./types";
 
-export type Tab = "device" | Kind;
+export type Tab = "device" | "network" | "timeline" | "comms" | Kind;
 export type Theme = "light" | "dark";
 
 export interface StepState {
@@ -232,6 +232,23 @@ function useStoreValue() {
     [state.extraction, t, errorText],
   );
 
+  const exportNetwork = useCallback(
+    async (fmt: "anx" | "xlsx" | "graphml", options?: Record<string, unknown>, positions?: Record<string, unknown>) => {
+      const id = toast.loading(t("export.working", { fmt: fmt === "anx" ? "i2" : fmt.toUpperCase() }));
+      try {
+        const res = await call<{ path: string; name: string }>("export_network", fmt, options ?? {}, positions ?? null);
+        toast.success(t("export.done", { name: res.name }), {
+          id,
+          action: { label: t("export.open"), onClick: () => void call("reveal", res.path) },
+          duration: 8000,
+        });
+      } catch (e) {
+        toast.error(errorText(e), { id });
+      }
+    },
+    [t, errorText],
+  );
+
   // Backend events → state
   useEffect(() => {
     return subscribe((name, payload) => {
@@ -307,6 +324,7 @@ function useStoreValue() {
     startExtraction,
     cancelExtraction,
     exportReport,
+    exportNetwork,
     errorText,
     deviceName,
     statusText,
