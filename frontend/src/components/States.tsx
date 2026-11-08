@@ -31,7 +31,9 @@ export function EmptySearch() {
   return <Shell icon={<SearchX />} title={t("empty.search")} />;
 }
 
-export function KindView<T>({ kind, children }: { kind: Kind; children: (rows: T[]) => ReactNode }) {
+/** Data for one category, with consistent empty / unavailable / loading states.
+ *  `action` adds a button to those states (e.g. importing Messenger on the chats tab). */
+export function KindView<T>({ kind, children, action }: { kind: Kind; children: (rows: T[]) => ReactNode; action?: ReactNode }) {
   const { t } = useI18n();
   const { state, openDialog } = useStore();
   const rows = useRecords<T>(kind);
@@ -44,10 +46,15 @@ export function KindView<T>({ kind, children }: { kind: Kind; children: (rows: T
           title={t("empty.noData")}
           sub={t("empty.noDataSub")}
           action={
-            connected && (
-              <Button variant="gold" icon={<Download className="size-4" />} onClick={() => openDialog("extract")}>
-                {t("rb.extract")}
-              </Button>
+            (connected || action) && (
+              <div className="flex flex-wrap items-center justify-center gap-2">
+                {connected && (
+                  <Button variant="gold" icon={<Download className="size-4" />} onClick={() => openDialog("extract")}>
+                    {t("rb.extract")}
+                  </Button>
+                )}
+                {action}
+              </div>
             )
           }
         />
@@ -68,6 +75,7 @@ export function KindView<T>({ kind, children }: { kind: Kind; children: (rows: T
               {unavailable.detail && <span className="mt-2 block font-mono text-[12px] text-faint">{unavailable.detail}</span>}
             </>
           }
+          action={action}
         />
       </div>
     );
@@ -85,7 +93,7 @@ export function KindView<T>({ kind, children }: { kind: Kind; children: (rows: T
   if (rows.length === 0) {
     return (
       <div className="card h-full">
-        <Shell icon={<Inbox />} title={t("empty.none")} />
+        <Shell icon={<Inbox />} title={t("empty.none")} action={action} />
       </div>
     );
   }

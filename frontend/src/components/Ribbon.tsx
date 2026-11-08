@@ -14,6 +14,7 @@ import {
   History,
   Info,
   Link2,
+  MessageCircle,
   Network,
   PhoneCall,
   ScrollText,
@@ -212,6 +213,7 @@ function MoreMenu({ size }: { size: Size }) {
           {item(<Stethoscope className="size-4.5" />, t("more.diag"), () => openDialog("diag", { platform, notFound: false }))}
           {item(<ScrollText className="size-4.5" />, t("more.audit"), () => openDialog("audit"))}
           {item(<FolderOpen className="size-4.5" />, t("more.folder"), () => state.case && void call("open_case_folder"))}
+          {item(<MessageCircle className="size-4.5" />, t("ms.open"), () => openDialog("messenger"))}
           <div className="my-1 h-px bg-line" />
           {item(
             <Sparkles className="size-4.5" />,

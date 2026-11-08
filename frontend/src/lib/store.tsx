@@ -26,7 +26,7 @@ export interface Job {
   message?: string;
 }
 
-export type DialogName = "diag" | "extract" | "cases" | "history" | "number" | "picker" | "audit" | "about" | "report";
+export type DialogName = "diag" | "extract" | "cases" | "history" | "number" | "picker" | "audit" | "about" | "report" | "messenger";
 
 export interface Dialogs {
   diag: { platform: Platform; notFound: boolean } | null;
@@ -39,10 +39,11 @@ export interface Dialogs {
   about: boolean;
   /** Report wizard; `formats` preselects outputs (e.g. the ribbon PDF button). */
   report: { formats?: string[] } | null;
+  messenger: boolean;
 }
 
 const EMPTY_STATE: AppState = { device: null, case: null, extraction: null, counts: {}, running: false };
-const NO_DIALOGS: Dialogs = { diag: null, extract: false, cases: false, history: false, number: false, picker: null, audit: false, about: false, report: null };
+const NO_DIALOGS: Dialogs = { diag: null, extract: false, cases: false, history: false, number: false, picker: null, audit: false, about: false, report: null, messenger: false };
 
 function readPref<T extends string>(key: string, fallback: T): T {
   try {

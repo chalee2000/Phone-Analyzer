@@ -1,14 +1,17 @@
 import { useVirtualizer } from "@tanstack/react-virtual";
 import clsx from "clsx";
-import { MessageSquareText, Paperclip } from "lucide-react";
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Lock, MessageSquareText, Paperclip } from "lucide-react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { SearchBox } from "../components/DataTable";
 import { EmptySearch, KindView } from "../components/States";
-import { Badge } from "../components/ui";
+import { Badge, Button, Chip } from "../components/ui";
+import { MessengerMark } from "../dialogs/MessengerImportDialog";
 import { fmtDate, fmtDayHeader, fmtTime, matches } from "../lib/format";
 import { useI18n } from "../lib/i18n";
+import { useStore } from "../lib/store";
 import type { ChatMessage, SmsMessage } from "../lib/types";
 import { Avatar } from "./CallsView";
+import { useMediaUrl } from "./MiscViews";
 
 interface Msg {
   key: string;
@@ -23,6 +26,7 @@ interface Msg {
   service?: string;
   attachment?: string;
   unread?: boolean;
+  encrypted?: boolean;
 }
 
 interface Thread {
@@ -33,19 +37,24 @@ interface Thread {
   messages: Msg[];
   last: Msg;
   group: boolean;
+  encrypted: boolean;
 }
 
-const APP_TONE: Record<string, string> = { LINE: "green", WhatsApp: "blue" };
+const APP_TONE: Record<string, string> = { LINE: "green", WhatsApp: "blue", Messenger: "violet" };
+const IMAGE_RE = /\.(jpe?g|png|gif|webp|bmp)$/i;
+const VIDEO_RE = /\.(mp4|mov|m4v|webm)$/i;
+const AUDIO_RE = /\.(m4a|aac|mp3|wav|ogg|opus)$/i;
 
 function buildThreads(msgs: Msg[]): Thread[] {
   const map = new Map<string, Thread>();
   for (const m of msgs) {
     let th = map.get(m.thread);
     if (!th) {
-      th = { key: m.thread, title: m.title, subtitle: m.subtitle, app: m.app, messages: [], last: m, group: false };
+      th = { key: m.thread, title: m.title, subtitle: m.subtitle, app: m.app, messages: [], last: m, group: false, encrypted: false };
       map.set(m.thread, th);
     }
     th.messages.push(m);
+    if (m.encrypted) th.encrypted = true;
     if (m.ts > th.last.ts) th.last = m;
   }
   for (const th of map.values()) {
@@ -84,6 +93,7 @@ function ThreadList({ threads, active, onPick }: { threads: Thread[]; active?: s
                   <span className="flex items-center gap-2">
                     <span className="truncate text-[14px] font-semibold text-ink">{th.title}</span>
                     {th.app && <Badge tone={APP_TONE[th.app] ?? "slate"}>{th.app}</Badge>}
+                    {th.encrypted && <Lock className="size-3.5 shrink-0 text-violet-500" aria-label="E2EE" />}
                     <span className="tabular ml-auto shrink-0 text-[11.5px] text-faint">{fmtDate(th.last.ts)}</span>
                   </span>
                   <span className="mt-0.5 flex items-center gap-2">
@@ -103,6 +113,26 @@ function ThreadList({ threads, active, onPick }: { threads: Thread[]; active?: s
   );
 }
 
+/** A file from the extraction shown inline: photo, video or voice clip; otherwise a paperclip line. */
+function Attachment({ rel, out, small }: { rel: string; out: boolean; small?: boolean }) {
+  const media = useMediaUrl();
+  const src = rel.includes("/") ? media(rel) : "";
+  const name = rel.split("/").pop() ?? rel;
+  if (src && IMAGE_RE.test(rel))
+    return (
+      <a href={src} target="_blank" rel="noreferrer" className="mb-1.5 block">
+        <img src={src} alt={name} loading="lazy" className={clsx("max-w-full rounded-xl object-cover", small ? "max-h-28" : "max-h-64")} />
+      </a>
+    );
+  if (src && VIDEO_RE.test(rel)) return <video src={src} controls preload="metadata" className="mb-1.5 max-h-64 max-w-full rounded-xl" />;
+  if (src && AUDIO_RE.test(rel)) return <audio src={src} controls preload="none" className="mb-1.5 max-w-full" />;
+  return (
+    <span className={clsx("mb-1 flex items-center gap-1 text-[12px]", out ? "text-white/70" : "text-muted")}>
+      <Paperclip className="size-3.5" /> {name}
+    </span>
+  );
+}
+
 function Conversation({ thread }: { thread: Thread }) {
   const { t, lang } = useI18n();
   const ref = useRef<HTMLDivElement>(null);
@@ -118,6 +148,11 @@ function Conversation({ thread }: { thread: Thread }) {
           <div className="flex items-center gap-2 truncate font-display text-[17px] font-semibold text-ink">
             {thread.title}
             {thread.app && <Badge tone={APP_TONE[thread.app] ?? "slate"}>{thread.app}</Badge>}
+            {thread.encrypted && (
+              <Badge tone="violet">
+                <Lock className="size-3" /> {t("msg.e2ee")}
+              </Badge>
+            )}
           </div>
           <div className="tabular truncate font-mono text-[12px] text-muted" data-selectable>
             {thread.subtitle}
@@ -153,12 +188,8 @@ function Conversation({ thread }: { thread: Thread }) {
                         : "rounded-bl-md border border-[var(--bubble-in-border)] bg-[var(--bubble-in)] text-ink",
                     )}
                   >
-                    {m.attachment && (
-                      <span className={clsx("mb-1 flex items-center gap-1 text-[12px]", m.out ? "text-white/70" : "text-muted")}>
-                        <Paperclip className="size-3.5" /> {m.attachment}
-                      </span>
-                    )}
-                    {m.body}
+                    {m.attachment && <Attachment rel={m.attachment} out={m.out} small={m.body.startsWith("[สติกเกอร์]")} />}
+                    {!(m.attachment?.includes("/") && /^\[[^\]]+\]$/.test(m.body)) && m.body}
                   </div>
                   <div className={clsx("mt-1 flex items-center gap-1.5 px-2 text-[11px] text-faint", m.out && "justify-end")}>
                     <span className="tabular">{fmtTime(m.ts)}</span>
@@ -174,13 +205,22 @@ function Conversation({ thread }: { thread: Thread }) {
   );
 }
 
-function Messages({ msgs, total }: { msgs: Msg[]; total: number }) {
+function Messages({ msgs, total, toolbar }: { msgs: Msg[]; total: number; toolbar?: ReactNode }) {
   const { t } = useI18n();
   const [q, setQ] = useState("");
+  const [app, setApp] = useState<string | null>(null);
   const threads = useMemo(() => buildThreads(msgs), [msgs]);
+  const apps = useMemo(() => {
+    const c = new Map<string, number>();
+    threads.forEach((th) => th.app && c.set(th.app, (c.get(th.app) ?? 0) + 1));
+    return [...c.entries()].sort((a, b) => b[1] - a[1]);
+  }, [threads]);
   const shown = useMemo(
-    () => (q ? threads.filter((th) => matches([th.title, th.subtitle], q) || th.messages.some((m) => matches([m.body, m.sender], q))) : threads),
-    [threads, q],
+    () =>
+      threads.filter(
+        (th) => (!app || th.app === app) && (!q || matches([th.title, th.subtitle], q) || th.messages.some((m) => matches([m.body, m.sender], q))),
+      ),
+    [threads, q, app],
   );
   const [active, setActive] = useState<string | undefined>(threads[0]?.key);
   useEffect(() => {
@@ -197,7 +237,20 @@ function Messages({ msgs, total }: { msgs: Msg[]; total: number }) {
               {shown.length.toLocaleString()} · {total.toLocaleString()} {t("stat.sms")}
             </span>
           </div>
+          {toolbar}
           <SearchBox value={q} onChange={setQ} className="w-full" />
+          {apps.length > 1 && (
+            <div className="flex flex-wrap gap-1.5" data-testid="chat-apps">
+              <Chip active={!app} onClick={() => setApp(null)} count={threads.length}>
+                {t("msg.allApps")}
+              </Chip>
+              {apps.map(([a, n]) => (
+                <Chip key={a} active={app === a} onClick={() => setApp(a)} count={n}>
+                  {a}
+                </Chip>
+              ))}
+            </div>
+          )}
         </div>
         <ThreadList threads={shown} active={active} onPick={setActive} />
       </div>
@@ -238,11 +291,33 @@ export function SmsView() {
   );
 }
 
+function MessengerButton({ compact }: { compact?: boolean }) {
+  const { t } = useI18n();
+  const { openDialog } = useStore();
+  if (compact)
+    return (
+      <button
+        onClick={() => openDialog("messenger")}
+        data-testid="chats-messenger"
+        className="focus-ring flex h-9 items-center gap-2 rounded-xl border border-line-strong bg-surface px-2.5 text-left text-[13px] font-semibold text-ink-2 transition hover:bg-surface-2"
+      >
+        <MessengerMark className="size-6 rounded-lg shadow-none" icon="size-3.5" />
+        {t("ms.open")}
+      </button>
+    );
+  return (
+    <Button variant="outline" icon={<MessengerMark className="size-5 rounded-md shadow-none" icon="size-3" />} onClick={() => openDialog("messenger")} data-testid="chats-messenger">
+      {t("ms.open")}
+    </Button>
+  );
+}
+
 export function ChatsView() {
   return (
-    <KindView<ChatMessage> kind="chats">
+    <KindView<ChatMessage> kind="chats" action={<MessengerButton />}>
       {(rows) => (
         <Messages
+          toolbar={<MessengerButton compact />}
           total={rows.length}
           msgs={rows.map((r, i) => ({
             key: String(i),
@@ -254,7 +329,9 @@ export function ChatsView() {
             body: r.body,
             out: r.direction === "out",
             ts: r.timestamp ?? 0,
-            attachment: r.attachment && !r.body.startsWith("[") ? r.attachment : undefined,
+            // Real files (a path inside the extraction) are shown inline; bare names only beside text.
+            attachment: r.attachment && (r.attachment.includes("/") || !r.body.startsWith("[")) ? r.attachment : undefined,
+            encrypted: r.encrypted,
           }))}
         />
       )}

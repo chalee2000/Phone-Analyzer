@@ -346,7 +346,7 @@ def iter_messages(exp: Export, owner: str) -> Iterator[tuple[Thread, str, dict[s
             mine = bool(owner) and sender_raw == owner
             msg = ChatMessage(
                 app=APP, thread=title, sender=ME if mine else (sender_raw or title), body=body,
-                direction="out" if mine else "in", timestamp=ts,
+                direction="out" if mine else "in", timestamp=ts, encrypted=t.e2ee,
             )
             all_refs = refs + ([("[สติกเกอร์]", str(sticker["uri"]))] if sticker and sticker.get("uri") else [])
             yield t, title, m, msg, all_refs

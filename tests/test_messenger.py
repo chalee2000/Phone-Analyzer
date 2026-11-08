@@ -139,6 +139,7 @@ def test_import_chats(imported):
     assert {"สมชาย ใจดี", "ทีมงาน", "ร้านค้า (คำขอข้อความ)", "ฝ้าย"} == threads
     e2ee = by_body["ลบแชตด้วย"]
     assert e2ee["timestamp"] == (T0 + 200) // 1000 * 1000  # seconds were scaled to ms
+    assert e2ee["encrypted"] is True and first["encrypted"] is False
     assert by_body["[วิดีโอ]"]["sender"] == "ฉัน"
 
 

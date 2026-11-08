@@ -7,6 +7,7 @@ import { TitleBar } from "./components/TitleBar";
 import { DiagnosticsDialog } from "./dialogs/DiagnosticsDialog";
 import { ExtractDialog } from "./dialogs/ExtractDialog";
 import { ProgressOverlay } from "./dialogs/ProgressOverlay";
+import { MessengerImportDialog } from "./dialogs/MessengerImportDialog";
 import { ReportWizard } from "./dialogs/ReportWizard";
 import { AboutDialog, AuditDialog, CaseDialog, HistoryDialog, NumberDialog, PickerDialog } from "./dialogs/SmallDialogs";
 import { I18nProvider } from "./lib/i18n";
@@ -88,6 +89,7 @@ function Shell() {
       <AuditDialog />
       <AboutDialog />
       <ReportWizard />
+      <MessengerImportDialog />
       <Toaster position="bottom-right" theme={theme} richColors closeButton offset={44} toastOptions={{ style: { fontFamily: "var(--font-sans)" } }} />
     </div>
   );

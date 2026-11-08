@@ -134,6 +134,7 @@ class ChatMessage(Record):
     direction: str  # in | out
     timestamp: int | None = None
     attachment: str = ""
+    encrypted: bool = False  # end-to-end encrypted chat (e.g. Messenger secure storage)
 
 
 @dataclass

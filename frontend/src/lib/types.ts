@@ -153,6 +153,7 @@ export interface ChatMessage {
   direction: "in" | "out";
   timestamp: number | null;
   attachment: string;
+  encrypted?: boolean;
 }
 export interface WebVisit {
   url: string;

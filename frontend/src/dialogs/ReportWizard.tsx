@@ -24,6 +24,7 @@ import {
   Languages,
   LayoutList,
   ListOrdered,
+  MessageCircle,
   Network,
   Package,
   PenLine,
@@ -210,6 +211,7 @@ function Stamp({ text }: { text: string }) {
 
 function DeviceIcon({ d }: { d: CaseDevice }) {
   if (d.method === "cdr") return <PhoneCall className="size-5" />;
+  if (d.method === "fb-export") return <MessageCircle className="size-5" />;
   return d.platform === "ios" ? <IphoneIcon className="size-5" /> : <AndroidIcon className="size-5" />;
 }
 

@@ -21,13 +21,19 @@
 
 ![ตัวอย่างรายงาน PDF](docs/screenshots/16-report-pdf.jpg)
 
+**นำเข้าข้อความ Messenger**
+
+| | |
+|---|---|
+| ![นำเข้า Messenger](docs/screenshots/17-messenger-import.jpg) | ![แชต Messenger](docs/screenshots/18-messenger-chats.jpg) |
+
 ## ความสามารถ
 
 | หมวด | Android (ADB, ไม่ต้อง root) | iPhone (backup) |
 |---|---|---|
 | ข้อมูลเครื่อง | ยี่ห้อ รุ่น Android build serial แบตเตอรี่ พื้นที่ บัญชี | รุ่น iOS serial IMEI เบอร์ แบตเตอรี่ พื้นที่ |
 | ประวัติการโทร / รายชื่อ / SMS | `content query` ถ้าเครื่องปฏิเสธ ใช้แอปตัวช่วยชั่วคราว (Android 10+) | CallHistory, AddressBook, sms.db (รวม iMessage) |
-| แชต | ต้อง root | WhatsApp, LINE (best-effort) |
+| แชต | ต้อง root (Messenger: นำเข้าจากไฟล์ Facebook ด้านล่าง) | WhatsApp, LINE (best-effort) |
 | ประวัติเว็บ / บันทึก | ต้อง root / ไม่มีในระบบ | Safari, Apple Notes |
 | บันทึกเสียง | ไฟล์จาก Recorder / MIUI / Call | Voice Memos |
 | Wi-Fi / SIM | `cmd wifi`, siminfo (SIM ที่เคยใส่) | wifi plist, ICCID / IMSI |
@@ -44,6 +50,18 @@
 * **ผังความเชื่อมโยงเครือข่าย** (แท็บ เครือข่าย): บุคคล เบอร์โทร ห้องแชต Wi-Fi สถานที่ บัญชี จากทุกเครื่อง + CDR, ไฮไลต์ผู้ที่พบในหลายเครื่อง, จัดกลุ่ม (Louvain), ตัวชี้วัด degree / betweenness, หาเส้นทาง, เพิ่มบุคคล/ยานพาหนะ/บัญชีธนาคารและเส้นเชื่อมเอง, บันทึกผัง, ส่งออก **i2 Analyst's Notebook (.anx)**, GraphML, Excel, PNG
 * **ไทม์ไลน์เหตุการณ์** (แท็บ ไทม์ไลน์): 4 ช่อง บุคคล / วัตถุ / สถานที่ / เหตุการณ์, กราฟภาพรวมรายวัน, กรองตามเครื่องและหมวด, ทำเครื่องหมายเหตุการณ์สำคัญ, ผู้ตรวจเพิ่มเหตุการณ์เอง, ส่งออก Excel / PDF
 * **วิเคราะห์การติดต่อ + CDR** (แท็บ วิเคราะห์การติดต่อ): คิวรีสำเร็จรูป (กลางคืน สายไม่ได้รับ สายสั้น/ยาว เบอร์ไม่บันทึกชื่อ พบหลายเครื่อง ฯลฯ), แผนที่ย้อนเหตุการณ์พร้อมพัดเสาสัญญาณตามทิศ (แผนที่ขอบเขตจังหวัดแบบออฟไลน์ หรือ OSM), โปรไฟล์ผู้ติดต่อพร้อม heatmap วัน × ชั่วโมง, นำเข้า CDR (CSV / Excel หัวคอลัมน์ไทยหรืออังกฤษ ปี พ.ศ. ได้)
+
+### นำเข้าข้อความ Messenger (แท็บ แชต → นำเข้า Messenger)
+
+Messenger เก็บข้อความในพื้นที่ส่วนตัวของแอป จึงดึงจากเครื่องที่ไม่ได้ root ไม่ได้ ให้นำเข้าจากไฟล์ที่ดาวน์โหลดจากบัญชีแทน:
+
+* **ดาวน์โหลดข้อมูลของคุณ (Facebook)**: ศูนย์บัญชี → ข้อมูลและการอนุญาตของคุณ → ดาวน์โหลดข้อมูลของคุณ → เลือก "ข้อความ" รูปแบบ **JSON** — เลือก zip ทุกส่วนพร้อมกันได้ หรือเลือกไฟล์ `.json` / โฟลเดอร์ที่แตกแล้ว
+* **แชตเข้ารหัส (E2EE)**: ในแอป Messenger → การตั้งค่า → ความเป็นส่วนตัวและความปลอดภัย → แชตที่เข้ารหัสตั้งแต่ต้นทางถึงปลายทาง → พื้นที่จัดเก็บข้อความ → ดาวน์โหลดข้อมูลที่จัดเก็บแบบปลอดภัย
+* แก้ภาษาไทยที่เพี้ยนในไฟล์ของ Facebook อัตโนมัติ, หาเจ้าของบัญชีให้ (เปลี่ยนได้), รวมไฟล์หลายส่วนและตัดข้อความซ้ำ
+* ได้ข้อความ การโทร ข้อความที่ยกเลิกการส่ง สติกเกอร์ ลิงก์ ไฟล์แนบ reaction และคำขอข้อความ; รูปที่แนบเข้าแท็บรูปภาพพร้อมภาพย่อ
+* ค่า SHA-256 ของไฟล์ต้นทางบันทึกใน audit log, ไฟล์ข้อความ JSON และสื่อที่อ้างถึงถูกคัดลอกเข้าคดีพร้อมค่าแฮช
+* ทุกการนำเข้าเป็นแหล่งข้อมูลหนึ่งในคดี จึงเข้าผังเครือข่าย ไทม์ไลน์ วิเคราะห์การติดต่อ และรายงานโดยอัตโนมัติ
+* มีปุ่ม "ไฟล์ตัวอย่าง" ไว้ฝึกใช้งาน
 
 ### รายงานผลการตรวจพิสูจน์ (ปุ่ม PDF / รายงานคดี)
 
@@ -126,6 +144,7 @@ spni/              Python backend
   case/workspace.py  งานวิเคราะห์ของผู้ตรวจ (บันทึกบนผัง, รายการไทม์ไลน์, bookmark, ผังที่บันทึก)
   analysis/        ผังเครือข่าย (networkx), ไทม์ไลน์, การติดต่อ
   cdr.py           นำเข้า CDR (CSV / Excel)
+  messenger.py     นำเข้า Messenger จากไฟล์ Facebook (Download Your Information / E2EE)
   export/          Excel / PDF / Word แบบด่วน, i2 ANX / GraphML
   report/          รายงานผลการตรวจพิสูจน์ (PDF / Word / Excel / HTML / ZIP)
   demo.py          อุปกรณ์จำลอง + CDR ตัวอย่าง
@@ -147,6 +166,8 @@ timeline, and call & contact analysis with CDR import and a playback map of cell
 report wizard produces forensic reports as PDF (password, classification banner and watermark, contents,
 link chart, hashes, audit log, signature block), Word, Excel, searchable HTML or a ZIP package with a
 manifest and SHA256SUMS; every report's hash is written to the case audit log. An animated, brand-specific
-connection guide helps examiners enable USB debugging. Demo devices with synthetic Thai data allow training without a phone. Run `python -m spni --demo`
+connection guide helps examiners enable USB debugging. Facebook Messenger chats, which a phone without root cannot
+expose, are imported from the account's "Download Your Information" JSON export and the secure-storage download of
+end-to-end encrypted chats, with Thai text repaired, attached photos, and the source files' SHA-256 in the audit log. Demo devices with synthetic Thai data allow training without a phone. Run `python -m spni --demo`
 after building the UI, or see *Development* above. The GitHub Actions workflow runs the tests, builds the
 Android helper app and produces the Windows build.

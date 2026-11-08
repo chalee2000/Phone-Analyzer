@@ -1,5 +1,5 @@
 import clsx from "clsx";
-import { ChevronRight, CircleHelp, History, Search, ShieldCheck, Sparkles, Usb } from "lucide-react";
+import { ChevronRight, CircleHelp, History, MessageCircle, Search, ShieldCheck, Sparkles, Usb } from "lucide-react";
 import { motion } from "motion/react";
 import { useEffect } from "react";
 import { AndroidIcon, IphoneIcon } from "../components/icons";
@@ -122,6 +122,9 @@ export function ConnectView() {
           </Button>
           <button onClick={() => openDialog("history")} className="flex items-center gap-1.5 text-[13.5px] font-semibold text-muted hover:text-ink">
             <History className="size-4" /> {t("connect.openCase")}
+          </button>
+          <button onClick={() => openDialog("messenger")} className="flex items-center gap-1.5 text-[13.5px] font-semibold text-muted hover:text-ink" data-testid="connect-messenger">
+            <MessageCircle className="size-4" /> {t("ms.open")}
           </button>
         </div>
 
