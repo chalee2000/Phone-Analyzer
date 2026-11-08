@@ -210,6 +210,8 @@ input, textarea, [data-selectable] {
 .leaflet-container.leaflet-container {
   background: #0a1430;
   font-family: var(--font-sans);
+  /* Leaflet panes use z-index 400–1000; keep them inside the map so dialogs stay on top. */
+  isolation: isolate;
 }
 .leaflet-control-attribution {
   background: rgba(11, 22, 54, 0.75) !important;

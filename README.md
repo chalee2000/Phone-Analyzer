@@ -11,6 +11,16 @@
 | ![SMS](docs/screenshots/5-sms.jpg) | ![รูปภาพ](docs/screenshots/6-photos.jpg) |
 | ![วินิจฉัยการเชื่อมต่อ](docs/screenshots/7-diagnostics.jpg) | ![iPhone โหมดมืด](docs/screenshots/8-iphone-dark.jpg) |
 
+**วิเคราะห์และรายงาน**
+
+| | |
+|---|---|
+| ![ผังความเชื่อมโยงเครือข่าย](docs/screenshots/10-network.jpg) | ![ไทม์ไลน์เหตุการณ์](docs/screenshots/11-timeline.jpg) |
+| ![วิเคราะห์การติดต่อและ CDR](docs/screenshots/12-comms.jpg) | ![สร้างรายงาน](docs/screenshots/13-report.jpg) |
+| ![ชุดข้อมูลของรายงาน](docs/screenshots/14-report-dataset.jpg) | ![รายงานเสร็จพร้อมค่าแฮช](docs/screenshots/15-report-done.jpg) |
+
+![ตัวอย่างรายงาน PDF](docs/screenshots/16-report-pdf.jpg)
+
 ## ความสามารถ
 
 | หมวด | Android (ADB, ไม่ต้อง root) | iPhone (backup) |
@@ -24,11 +34,28 @@
 | รูปภาพ | DCIM / Pictures พร้อม EXIF + GPS | Camera Roll พร้อม EXIF + GPS (รวม HEIC) |
 | แอป | `dumpsys package` | installation_proxy |
 
-* **รายงาน**: Excel (ทุกหมวด + ค่าแฮช), PDF ภาษาไทย (ฟอนต์ Sarabun), รูปภาพเป็น Word (พร้อมวันที่ถ่าย พิกัด SHA-256)
+* **ส่งออกด่วน**: Excel (ทุกหมวด + ค่าแฮช), รูปภาพเป็น Word (พร้อมวันที่ถ่าย พิกัด SHA-256)
 * **คดี**: ทุกการสกัดถูกเก็บในโฟลเดอร์คดี (`Documents\Phone Analysis Cases`) พร้อม SQLite, `manifest.json` (SHA-256 ทุกไฟล์) และ `audit.log` บันทึกทุกคำสั่งที่ส่งไปยังเครื่อง
 * **วินิจฉัยการเชื่อมต่อ**: ภาพเคลื่อนไหวสอนเปิด USB debugging แยกตามยี่ห้อ (Samsung, Xiaomi, OPPO, realme, vivo, HUAWEI, HONOR, Pixel) และ iPhone พร้อมตรวจสถานะ ADB / ไดรเวอร์ / Apple Mobile Device Service จริง
 * **โหมดสาธิต**: อุปกรณ์จำลอง Android และ iPhone พร้อมข้อมูลภาษาไทยสังเคราะห์ ใช้ฝึกอบรมหรือทดสอบได้โดยไม่ต้องมีเครื่องจริง (`--demo` หรือเมนู เพิ่มเติม → โหมดสาธิต)
-* รอบถัดไป: ไทม์ไลน์ ส่งออก i2 ผังความเชื่อมโยง เชื่อมโยงข้ามเครื่อง วิเคราะห์ CDR ฐานข้อมูลเบอร์โทร (ปุ่มแสดง “เร็ว ๆ นี้”)
+
+### วิเคราะห์ (ทุกเครื่องในคดีเดียวกัน)
+
+* **ผังความเชื่อมโยงเครือข่าย** (แท็บ เครือข่าย): บุคคล เบอร์โทร ห้องแชต Wi-Fi สถานที่ บัญชี จากทุกเครื่อง + CDR, ไฮไลต์ผู้ที่พบในหลายเครื่อง, จัดกลุ่ม (Louvain), ตัวชี้วัด degree / betweenness, หาเส้นทาง, เพิ่มบุคคล/ยานพาหนะ/บัญชีธนาคารและเส้นเชื่อมเอง, บันทึกผัง, ส่งออก **i2 Analyst's Notebook (.anx)**, GraphML, Excel, PNG
+* **ไทม์ไลน์เหตุการณ์** (แท็บ ไทม์ไลน์): 4 ช่อง บุคคล / วัตถุ / สถานที่ / เหตุการณ์, กราฟภาพรวมรายวัน, กรองตามเครื่องและหมวด, ทำเครื่องหมายเหตุการณ์สำคัญ, ผู้ตรวจเพิ่มเหตุการณ์เอง, ส่งออก Excel / PDF
+* **วิเคราะห์การติดต่อ + CDR** (แท็บ วิเคราะห์การติดต่อ): คิวรีสำเร็จรูป (กลางคืน สายไม่ได้รับ สายสั้น/ยาว เบอร์ไม่บันทึกชื่อ พบหลายเครื่อง ฯลฯ), แผนที่ย้อนเหตุการณ์พร้อมพัดเสาสัญญาณตามทิศ (แผนที่ขอบเขตจังหวัดแบบออฟไลน์ หรือ OSM), โปรไฟล์ผู้ติดต่อพร้อม heatmap วัน × ชั่วโมง, นำเข้า CDR (CSV / Excel หัวคอลัมน์ไทยหรืออังกฤษ ปี พ.ศ. ได้)
+
+### รายงานผลการตรวจพิสูจน์ (ปุ่ม PDF / รายงานคดี)
+
+หน้าต่างสร้างรายงาน 6 ขั้น: **ทั่วไป → ข้อมูลคดี → ชุดข้อมูล → ความปลอดภัย → รูปแบบ → สรุป**
+
+* รูปแบบ: **PDF** (ปก สารบัญพร้อม bookmark เลขหน้า "หน้า X / Y" ผังเครือข่าย รูปย่อ ค่าแฮช audit log ช่องลงนาม), **Word** (แก้ไขต่อได้), **Excel**, **HTML** ไฟล์เดียว (ค้นหา / เรียงตารางได้), **แพ็กเกจ ZIP** (PDF + Excel + HTML + `manifest.json` + `SHA256SUMS.txt`)
+* ข้อมูลคดี: เลขคดี ชื่อคดี ประเภทความผิด เลขของกลาง ผู้ตรวจพิสูจน์ พนักงานสอบสวน หน่วยงาน สังกัด สถานที่ตรวจ หมายเหตุ — บันทึกไว้กับคดีอัตโนมัติ
+* ชุดข้อมูล: เลือกเครื่อง หมวด ช่วงวันที่ และส่วนวิเคราะห์ (ผังความเชื่อมโยง ความเชื่อมโยงข้ามเครื่อง ผู้ติดต่อบ่อย Top N เหตุการณ์ที่ทำเครื่องหมาย)
+* ความปลอดภัย: รหัสผ่าน PDF (ห้ามคัดลอก / แก้ไข), ชั้นความลับ ปกปิด / ลับ / ลับมาก / ลับที่สุด (แถบสีแดงทุกหน้า + ลายน้ำ), ไฟล์ `.sha256` และบันทึกค่า SHA-256 ของรายงานลง audit log ของคดีทุกครั้ง
+* รูปแบบ: ไทย / English, ปี พ.ศ. / ค.ศ., เรียงใหม่ → เก่า หรือ เก่า → ใหม่, แนวนอน / แนวตั้ง, จำกัดจำนวนแถวต่อหมวด
+
+ยังไม่มี (ปุ่มแสดง “เร็ว ๆ นี้”): เปิด LINK, ฐานข้อมูลเบอร์โทร
 
 ## หลักการด้านพยานหลักฐาน
 
@@ -96,8 +123,12 @@ spni/              Python backend
   android/         ADB, content query parser, ข้อมูลเครื่อง, แอปตัวช่วย
   ios/             usbmux/lockdown, backup (เข้ารหัสชั่วคราว), parsers
   case/store.py    โฟลเดอร์คดี + SQLite + SHA-256 + audit log
-  export/          Excel / PDF / Word
-  demo.py          อุปกรณ์จำลอง
+  case/workspace.py  งานวิเคราะห์ของผู้ตรวจ (บันทึกบนผัง, รายการไทม์ไลน์, bookmark, ผังที่บันทึก)
+  analysis/        ผังเครือข่าย (networkx), ไทม์ไลน์, การติดต่อ
+  cdr.py           นำเข้า CDR (CSV / Excel)
+  export/          Excel / PDF / Word แบบด่วน, i2 ANX / GraphML
+  report/          รายงานผลการตรวจพิสูจน์ (PDF / Word / Excel / HTML / ZIP)
+  demo.py          อุปกรณ์จำลอง + CDR ตัวอย่าง
 frontend/          React 19 + TypeScript + Tailwind 4 (Vite)
 android-agent/     แอปตัวช่วย Android (Kotlin) — build ใน GitHub Actions
 resources/         ฟอนต์ Sarabun (OFL), ไอคอน
@@ -110,8 +141,12 @@ spni.spec          PyInstaller
 
 Phone Analysis v4 is a Windows desktop tool (Python + pywebview + React) for logical extraction of
 Android phones over ADB and iPhones through iTunes-format backups. It stores every extraction in a case
-folder with SHA-256 hashes and an audit log of every command sent to the device, and exports Excel, Thai
-PDF and photos-to-Word reports. An animated, brand-specific connection guide helps examiners enable USB
-debugging. Demo devices with synthetic Thai data allow training without a phone. Run `python -m spni --demo`
+folder with SHA-256 hashes and an audit log of every command sent to the device. Across all devices in a
+case it offers a link chart (cross-device entities, communities, i2 ANX / GraphML export), a swimlane event
+timeline, and call & contact analysis with CDR import and a playback map of cell-site sectors. A six-step
+report wizard produces forensic reports as PDF (password, classification banner and watermark, contents,
+link chart, hashes, audit log, signature block), Word, Excel, searchable HTML or a ZIP package with a
+manifest and SHA256SUMS; every report's hash is written to the case audit log. An animated, brand-specific
+connection guide helps examiners enable USB debugging. Demo devices with synthetic Thai data allow training without a phone. Run `python -m spni --demo`
 after building the UI, or see *Development* above. The GitHub Actions workflow runs the tests, builds the
 Android helper app and produces the Windows build.

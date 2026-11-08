@@ -175,7 +175,7 @@ export function CommsMap({ points, focusId, onPick }: { points: MapPoint[]; focu
 
   const current = points[cursor];
   return (
-    <div className="relative h-full w-full overflow-hidden rounded-b-[1.15rem] bg-[#0a1430]">
+    <div className="relative isolate h-full w-full overflow-hidden rounded-b-[1.15rem] bg-[#0a1430]">
       <div className="absolute inset-0">
         <div ref={el} className="h-full w-full" data-testid="comms-map" />
       </div>
