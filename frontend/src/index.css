@@ -205,3 +205,25 @@ input, textarea, [data-selectable] {
     transition-duration: 0.001ms !important;
   }
 }
+
+/* Leaflet inside the dark map panel */
+.leaflet-container.leaflet-container {
+  background: #0a1430;
+  font-family: var(--font-sans);
+}
+.leaflet-control-attribution {
+  background: rgba(11, 22, 54, 0.75) !important;
+  color: #94a3b8 !important;
+  font-size: 10px !important;
+}
+.leaflet-control-attribution a {
+  color: #cbd5e1 !important;
+}
+.leaflet-control-zoom a {
+  background: #0b1636 !important;
+  color: #e2e8f0 !important;
+  border-color: rgba(255, 255, 255, 0.12) !important;
+}
+.leaflet-bottom.leaflet-right {
+  bottom: 52px;
+}
