@@ -97,3 +97,15 @@ def test_media_server_blocks_traversal(tmp_path):
             urllib.request.urlopen(f"http://127.0.0.1:{server.port}/wrong-token/c1/a.txt")
     finally:
         server.stop()
+
+
+def test_disconnect_keeps_data_for_review_then_close(cases_dir):
+    api = Api(EventBus(), cases_dir, demo=True)
+    run_demo(api, "demo:ios")
+    assert api.disconnect()["ok"]
+    state = api.state()["data"]
+    assert state["device"]["offline"] and state["extraction"] is not None
+    assert len(api.get_records("chats")["data"]) == 555
+    assert api.close_extraction()["ok"]
+    state = api.state()["data"]
+    assert state["device"] is None and state["extraction"] is None and state["case"] is not None

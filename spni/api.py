@@ -176,11 +176,27 @@ class Api:
     @endpoint
     def disconnect(self) -> None:
         with self._lock:
+            if self._job:
+                raise ApiError("busy")
             if self._extractor:
                 self._extractor.close()
-            self._device = None
             self._extractor = None
+            self._device = None
+            if self._case and self._extraction_id:
+                # Keep the extracted data on screen for review, without a live device.
+                info = self._case.extraction_info(self._extraction_id)
+                self._device = {"id": f"offline:{info['serial']}", "info": info["device"], "offline": True}
         self._bus.emit("device.disconnected", {})
+
+    @endpoint
+    def close_extraction(self) -> None:
+        """Stop reviewing the open extraction (the case stays open)."""
+        with self._lock:
+            if self._job:
+                raise ApiError("busy")
+            self._extraction_id = None
+            if self._device and self._device.get("offline"):
+                self._device = None
 
     @endpoint
     def state(self) -> dict[str, Any]:

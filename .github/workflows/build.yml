@@ -1,0 +1,88 @@
+name: build
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: Tests and UI build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install
+        run: pip install -e ".[dev]"
+      - name: pytest
+        run: pytest -o addopts=""
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Typecheck and build UI
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run build
+
+  agent:
+    name: Android helper app
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.11.1"
+      - name: Build APK
+        run: gradle -p android-agent assembleDebug --no-daemon
+      - name: Collect APK
+        run: cp android-agent/app/build/outputs/apk/debug/app-debug.apk spni-agent.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: spni-agent
+          path: spni-agent.apk
+
+  windows:
+    name: Windows app
+    needs: [test, agent]
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - uses: actions/download-artifact@v4
+        with:
+          name: spni-agent
+          path: resources/agent
+      - name: Android platform-tools
+        shell: pwsh
+        run: |
+          Invoke-WebRequest "https://dl.google.com/android/repository/platform-tools-latest-windows.zip" -OutFile platform-tools.zip
+          Expand-Archive platform-tools.zip -DestinationPath resources -Force
+      - name: Build UI
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run build
+      - name: Install Python packages
+        run: pip install -e ".[dev]"
+      - name: Smoke test (demo extraction + reports)
+        run: pytest -o addopts="" tests/test_pipeline.py
+      - name: PyInstaller
+        run: pyinstaller spni.spec --noconfirm
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SPNI-Phone-Analysis-windows
+          path: dist/SPNI Phone Analysis
