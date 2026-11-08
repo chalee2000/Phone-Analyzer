@@ -575,6 +575,8 @@ const th = {
   "kind.chat": "แชต",
   "err.cdr_columns_not_found": "ไม่พบคอลัมน์เบอร์ต้นทาง/ปลายทางในไฟล์ CDR",
   "err.no_case": "ยังไม่ได้เปิดคดี",
+  "msgdir.incoming": "รับ",
+  "msgdir.outgoing": "ส่ง",
 };
 
 type Key = keyof typeof th;
@@ -1135,6 +1137,8 @@ const en: Record<Key, string> = {
   "kind.chat": "Chat",
   "err.cdr_columns_not_found": "No A/B number columns found in the CDR file",
   "err.no_case": "No case is open",
+  "msgdir.incoming": "Received",
+  "msgdir.outgoing": "Sent",
 };
 
 export type TKey = Key;
