@@ -5,6 +5,7 @@ import {
   Database,
   Download,
   Ellipsis,
+  FileBadge,
   FileImage,
   FileSpreadsheet,
   FileText,
@@ -239,6 +240,7 @@ export function Ribbon() {
   const hasData = !!state.extraction;
   const size = useRibbonSize();
   const hasCase = !!state.case;
+  const canReport = hasData || !!state.case?.extraction_count;
   const analysis: { icon: ReactNode; label: string; tone: string; onClick?: () => void; soon?: boolean; id: string }[] = [
     { id: "i2", icon: <Share2 className="size-[18px]" />, label: t("rb.i2"), tone: "orange", onClick: () => (hasCase ? void exportNetwork("anx") : openDialog("cases")) },
     { id: "timeline", icon: <ChartColumnBig className="size-[18px]" />, label: t("rb.timeline"), tone: "blue", onClick: () => setTab("timeline") },
@@ -290,7 +292,8 @@ export function Ribbon() {
 
       <Group title={t("group.report")}>
         <RButton size={size} icon={<FileSpreadsheet className="size-5" />} label={t("rb.excel")} tone="emerald" disabled={!hasData} onClick={() => void exportReport("excel", lang)} tip={t("tip.excel")} testId="excel" />
-        <RButton size={size} icon={<FileText className="size-5" />} label={t("rb.pdf")} tone="rose" disabled={!hasData} onClick={() => void exportReport("pdf", lang)} tip={t("tip.pdf")} testId="pdf" />
+        <RButton size={size} icon={<FileText className="size-5" />} label={t("rb.pdf")} tone="rose" disabled={!canReport} onClick={() => openDialog("report", { formats: ["pdf"] })} tip={t("tip.pdf")} testId="pdf" />
+        <RButton size={size} icon={<FileBadge className="size-5" />} label={t("rb.report")} tone="navy" disabled={!canReport} onClick={() => openDialog("report", {})} tip={t("tip.report")} testId="report" />
       </Group>
 
       <Group title={t("group.case")}>

@@ -1,7 +1,6 @@
 import { useVirtualizer } from "@tanstack/react-virtual";
 import clsx from "clsx";
-import cytoscape, { type Core, type ElementDefinition, type LayoutOptions } from "cytoscape";
-import fcose from "cytoscape-fcose";
+import { type Core, type ElementDefinition, type LayoutOptions } from "cytoscape";
 import {
   Circle,
   Crosshair,
@@ -32,11 +31,10 @@ import { CopyButton } from "../components/DevicePanel";
 import { Badge, Button, Field, Input, Modal, ModalHeader, Spinner, Switch, Tooltip } from "../components/ui";
 import { DEVICE_COLORS, ENTITY_META, iconDataUri, iconSvg, type NetEdge, type NetGraph, type NetNode } from "../lib/analysis";
 import { call } from "../lib/bridge";
+import cytoscape from "../lib/cy";
 import { fmtDateTime, fmtDuration } from "../lib/format";
 import { useI18n } from "../lib/i18n";
 import { useStore } from "../lib/store";
-
-cytoscape.use(fcose);
 
 const COMMUNITY_COLORS = ["#38bdf8", "#f2c14e", "#34d399", "#f472b6", "#a78bfa", "#fb923c", "#22d3ee", "#facc15", "#4ade80", "#f87171", "#818cf8", "#2dd4bf", "#e879f9", "#a3e635"];
 const EDGE_COLORS: Record<string, string> = {

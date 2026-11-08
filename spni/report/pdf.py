@@ -16,6 +16,7 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfgen.canvas import Canvas
 from reportlab.platypus import (
     BaseDocTemplate,
+    CondPageBreak,
     Frame,
     Image,
     KeepTogether,
@@ -265,15 +266,15 @@ def build(ds: Dataset, path: Path) -> Path:
             story.append(KeepTogether([Paragraph(escape(c.tr(ds, "network")), st["h2"]), img]))
         if ds.has("cross_device") and ds.cross_device:
             head, rows, rel = c.cross_device_table(ds)
-            story.append(Paragraph(escape(c.tr(ds, "cross")), st["h2"]))
+            story += [CondPageBreak(35 * mm), Paragraph(escape(c.tr(ds, "cross")), st["h2"])]
             story.append(_table(head, rows, rel, width, st))
         if ds.has("top_contacts") and ds.top_contacts:
             head, rows, rel = c.top_contacts_table(ds)
-            story.append(Paragraph(escape(c.tr(ds, "top")), st["h2"]))
+            story += [CondPageBreak(35 * mm), Paragraph(escape(c.tr(ds, "top")), st["h2"])]
             story.append(_table(head, rows, rel, width, st))
         if ds.has("bookmarks") and ds.bookmarks:
             head, rows, rel = c.bookmark_table(ds)
-            story.append(Paragraph(escape(c.tr(ds, "bookmarks")), st["h2"]))
+            story += [CondPageBreak(35 * mm), Paragraph(escape(c.tr(ds, "bookmarks")), st["h2"])]
             story.append(_table(head, rows, rel, width, st))
     # ── records ──
     if ds.has("records"):
@@ -288,7 +289,7 @@ def build(ds: Dataset, path: Path) -> Path:
                     story.append(h1("records"))
                     first = False
                 label = c.KIND_LABELS[kind][0 if ds.th else 1]
-                story.append(Paragraph(escape(f"{d.label} — {label} ({len(recs):,})"), st["h2"]))
+                story += [CondPageBreak(35 * mm), Paragraph(escape(f"{d.label} — {label} ({len(recs):,})"), st["h2"])]
                 if kind == "photos" and ds.has("photos") and ds.spec.thumbnails:
                     story += _contact_sheet(ds, d, recs[: min(len(recs), 240)], width, st)
                 head, rows, rel = c.kind_table(ds, kind, recs)

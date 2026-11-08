@@ -33,8 +33,8 @@ function Burst() {
 }
 
 export function ProgressOverlay() {
-  const { t, lang } = useI18n();
-  const { job, setJob, cancelExtraction, state, deviceName, setTab, exportReport } = useStore();
+  const { t } = useI18n();
+  const { job, setJob, cancelExtraction, state, deviceName, setTab, openDialog } = useStore();
   const [now, setNow] = useState(Date.now());
   const done = !!job?.finishedAt;
   const jobId = job?.id;
@@ -141,7 +141,15 @@ export function ProgressOverlay() {
             ) : (
               <>
                 {ok && (
-                  <Button variant="outline" icon={<FileText className="size-4" />} onClick={() => void exportReport("pdf", lang)}>
+                  <Button
+                    variant="outline"
+                    icon={<FileText className="size-4" />}
+                    onClick={() => {
+                      close();
+                      openDialog("report", { formats: ["pdf"] });
+                    }}
+                    data-testid="pg-report"
+                  >
                     {t("pg.pdf")}
                   </Button>
                 )}

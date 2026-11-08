@@ -26,7 +26,7 @@ export interface Job {
   message?: string;
 }
 
-export type DialogName = "diag" | "extract" | "cases" | "history" | "number" | "picker" | "audit" | "about";
+export type DialogName = "diag" | "extract" | "cases" | "history" | "number" | "picker" | "audit" | "about" | "report";
 
 export interface Dialogs {
   diag: { platform: Platform; notFound: boolean } | null;
@@ -37,10 +37,12 @@ export interface Dialogs {
   picker: ScannedDevice[] | null;
   audit: boolean;
   about: boolean;
+  /** Report wizard; `formats` preselects outputs (e.g. the ribbon PDF button). */
+  report: { formats?: string[] } | null;
 }
 
 const EMPTY_STATE: AppState = { device: null, case: null, extraction: null, counts: {}, running: false };
-const NO_DIALOGS: Dialogs = { diag: null, extract: false, cases: false, history: false, number: false, picker: null, audit: false, about: false };
+const NO_DIALOGS: Dialogs = { diag: null, extract: false, cases: false, history: false, number: false, picker: null, audit: false, about: false, report: null };
 
 function readPref<T extends string>(key: string, fallback: T): T {
   try {
@@ -108,7 +110,7 @@ function useStoreValue() {
     setDialogs((d) => ({ ...d, [name]: value ?? true }));
   }, []);
   const closeDialog = useCallback((name: DialogName) => {
-    setDialogs((d) => ({ ...d, [name]: name === "diag" || name === "picker" ? null : false }));
+    setDialogs((d) => ({ ...d, [name]: name === "diag" || name === "picker" || name === "report" ? null : false }));
   }, []);
 
   const resetRecords = useCallback(() => {
