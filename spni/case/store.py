@@ -46,7 +46,11 @@ CREATE TABLE IF NOT EXISTS audit(
 );
 """
 
-CASE_FIELDS = ("case_no", "title", "investigator", "unit", "note")
+CASE_FIELDS = (
+    "case_no", "title", "investigator", "unit", "note",
+    # Forensic report details (filled in the report wizard and remembered per case)
+    "examiner", "evidence_no", "location", "department", "organization", "crime_type",
+)
 
 
 def default_cases_root() -> Path:

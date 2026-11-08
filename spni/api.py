@@ -26,7 +26,7 @@ from .analysis import comms as comms_mod
 from .analysis import network as network_mod
 from .analysis import timeline as timeline_mod
 from .case import workspace
-from .case.store import Case, CaseStore, default_cases_root
+from .case.store import CASE_FIELDS, Case, CaseStore, default_cases_root
 from .demo import DEMO_ANDROID_ID, DEMO_IOS_ID, DemoExtractor, demo_devices
 from .events import EventBus
 from .extract import BaseExtractor, Cancelled, ExtractionContext
@@ -73,6 +73,8 @@ class Api:
         self._case: Case | None = None
         self._extraction_id: str | None = None
         self._job: dict[str, Any] | None = None
+        self._reporting = False
+        self._report_paths: set[Path] = set()  # report outputs the examiner may open/reveal
 
     # ── wiring (not exposed: underscore names are hidden from JS) ───────────
     def _attach_window(self, window) -> None:
@@ -349,7 +351,7 @@ class Api:
     def update_case(self, info: dict[str, Any]) -> dict[str, Any]:
         if not self._case:
             raise ApiError("no_case")
-        self._case.set_meta({k: info.get(k, "") for k in ("case_no", "title", "investigator", "unit", "note")})
+        self._case.set_meta({k: info[k] for k in CASE_FIELDS if k in info})
         return self._case.meta()
 
     @endpoint
@@ -399,14 +401,20 @@ class Api:
         self._case.get_extraction(self._extraction_id).audit(f"export.{fmt}", path.name)
         return {"path": str(path), "name": path.name}
 
-    @endpoint
-    def reveal(self, path: str) -> None:
-        target = Path(path)
-        root = self._store.root.resolve()
+    def _allowed(self, path: str) -> Path:
+        """Only files inside the cases root, or reports produced this session."""
+        target = Path(path).resolve()
+        if target in self._report_paths:
+            return target
         try:
-            target.resolve().relative_to(root)
+            target.relative_to(self._store.root.resolve())
         except ValueError:
             raise ApiError("forbidden")
+        return target
+
+    @endpoint
+    def reveal(self, path: str) -> None:
+        target = self._allowed(path)
         if sys.platform == "win32":
             if target.is_file():
                 subprocess.Popen(["explorer", "/select,", str(target)])
@@ -416,6 +424,62 @@ class Api:
             subprocess.Popen(["open", "-R", str(target)])
         else:
             subprocess.Popen(["xdg-open", str(target.parent if target.is_file() else target)])
+
+    @endpoint
+    def open_file(self, path: str) -> None:
+        """Open a produced file with its default application."""
+        target = self._allowed(path)
+        if not target.is_file():
+            raise ApiError("not_found", path)
+        if sys.platform == "win32":
+            os.startfile(str(target))  # type: ignore[attr-defined]
+        elif sys.platform == "darwin":
+            subprocess.Popen(["open", str(target)])
+        else:
+            subprocess.Popen(["xdg-open", str(target)])
+
+    @endpoint
+    def choose_folder(self, initial: str = "") -> str | None:
+        """Native folder picker (desktop only; the dev server has no window)."""
+        if not self._window:
+            return None
+        import webview
+
+        kind = getattr(getattr(webview, "FileDialog", None), "FOLDER", None) or webview.FOLDER_DIALOG
+        start = initial if initial and Path(initial).is_dir() else ""
+        res = self._window.create_file_dialog(kind, directory=start)
+        if not res:
+            return None
+        return str(res[0] if isinstance(res, (list, tuple)) else res)
+
+    # ── forensic report ──────────────────────────────────────────────────
+    @endpoint
+    def report_defaults(self) -> dict[str, Any]:
+        from . import report
+
+        return report.defaults(self._require_case())
+
+    @endpoint
+    def generate_report(self, spec: dict[str, Any], chart_png: str | None = None) -> dict[str, Any]:
+        from . import report
+
+        case = self._require_case()
+        with self._lock:
+            if self._job or self._reporting:
+                raise ApiError("busy")
+            self._reporting = True
+        try:
+            result = report.generate(
+                case, spec or {}, chart_png,
+                lambda step, frac: self._bus.emit("report.progress", {"step": step, "progress": round(frac, 3)}),
+            )
+        finally:
+            self._reporting = False
+        self._report_paths.add(Path(result["out_dir"]).resolve())
+        for f in result["files"]:
+            self._report_paths.add(Path(f["path"]).resolve())
+        self._bus.emit("case.opened", case.meta())  # case details may have been edited in the wizard
+        return result
 
     @endpoint
     def open_case_folder(self) -> None:

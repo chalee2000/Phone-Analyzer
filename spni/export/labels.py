@@ -51,13 +51,18 @@ UNAVAILABLE = {
 }
 
 
+# Set to 543 while rendering a report that uses the Buddhist era (see spni.report).
+YEAR_OFFSET = 0
+
+
 def fmt_dt(ms: Any) -> str:
     if not ms:
         return ""
     try:
-        return datetime.fromtimestamp(int(ms) / 1000).strftime("%d/%m/%Y %H:%M:%S")
+        dt = datetime.fromtimestamp(int(ms) / 1000)
     except (ValueError, OSError, OverflowError):
         return ""
+    return f"{dt:%d/%m/}{dt.year + YEAR_OFFSET}{dt:  %H:%M:%S}".replace("  ", " ")
 
 
 def fmt_iso(value: Any) -> str:
