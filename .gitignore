@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+.pytest_cache/
+build/
+dist/
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/*.tsbuildinfo
+
+# Android agent
+android-agent/.gradle/
+android-agent/build/
+android-agent/app/build/
+android-agent/local.properties
+
+# Bundled at build time (not committed)
+resources/agent/*.apk
+resources/platform-tools/
+
+# Runtime data
+cases/
+*.log
+.DS_Store
+Thumbs.db

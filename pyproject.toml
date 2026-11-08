@@ -1,0 +1,36 @@
+[project]
+name = "spni-phone-analysis"
+version = "4.0.0"
+description = "SPNI Phone Analysis — ระบบสกัดและวิเคราะห์พยานหลักฐานจากโทรศัพท์มือถือ (Android / iOS)"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "pywebview>=5.3",
+    "adbutils>=2.8",
+    "pymobiledevice3>=4.14",
+    "iphone_backup_decrypt>=0.9",
+    "openpyxl>=3.1",
+    "reportlab>=4.2",
+    "uharfbuzz>=0.39",
+    "python-docx>=1.1",
+    "pillow>=10.4",
+    "pillow-heif>=0.18",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.3", "pyinstaller>=6.10"]
+
+[project.scripts]
+spni = "spni.app:main"
+spni-devserver = "spni.devserver:main"
+
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["spni*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"

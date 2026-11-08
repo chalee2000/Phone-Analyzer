@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">SPNI Agent</string>
+    <string name="exporting">SPNI Phone Analysis is exporting data over USB…</string>
+    <string name="please_allow">Tap “Allow” so SPNI Phone Analysis can read contacts, call log and SMS.</string>
+    <string name="done">Export finished. This app will be removed automatically.</string>
+</resources>
