@@ -44,8 +44,13 @@ jobs:
             https://services.gradle.org/distributions/gradle-8.11.1-bin.zip
           unzip -q gradle.zip -d "$RUNNER_TEMP"
           echo "$RUNNER_TEMP/gradle-8.11.1/bin" >> "$GITHUB_PATH"
-      - name: Build APK
-        run: gradle -p android-agent assembleDebug --no-daemon --stacktrace
+      - name: Build APK (retries on transient download errors)
+        run: |
+          for attempt in 1 2 3; do
+            gradle -p android-agent assembleDebug --no-daemon && exit 0
+            echo "Gradle attempt $attempt failed; retrying in 30 s"; sleep 30
+          done
+          exit 1
       - name: Collect APK
         run: cp android-agent/app/build/outputs/apk/debug/app-debug.apk spni-agent.apk
       - uses: actions/upload-artifact@v4

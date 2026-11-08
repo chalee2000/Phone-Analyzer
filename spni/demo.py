@@ -38,6 +38,25 @@ from .models import (
 
 DEMO_ANDROID_ID = "demo:android"
 DEMO_IOS_ID = "demo:ios"
+DEMO_ANDROID_NUMBER = "0861234001"
+DEMO_IOS_NUMBER = "0951234002"
+
+# People known to both demo owners: same numbers, saved under different names.
+# Extracting both demo phones into one case shows cross-device links.
+SHARED_PEOPLE = [
+    ("เสี่ยหมู", "หมู บางนา", "0817001001"),
+    ("พี่บอย วินมอไซค์", "บอย วิน", "0817001002"),
+    ("ไอ้โต้ง", "โต้ง", "0817001003"),
+    ("เฮียเล้ง", "เล้ง ตลาด", "0817001004"),
+    ("พี่เอ็ม ขนส่ง", "เอ็ม ขนส่ง", "0817001005"),
+    ("ธนพล ศรีวงศ์", "ธนพล", "0817001006"),
+    ("น้องฝ้าย", "ฝ้าย", "0817001007"),
+    ("อนุชา บุญเรือง", "อนุชา", "0817001008"),
+]
+
+
+def cdr_partners() -> list[str]:
+    return [n for _, _, n in SHARED_PEOPLE] + [DEMO_IOS_NUMBER]
 
 FIRST = [
     "สมชาย", "สมศักดิ์", "วิชัย", "ประเสริฐ", "สุนทร", "อนุชา", "ธนพล", "กิตติพงษ์", "ณัฐวุฒิ", "ศุภชัย",
@@ -171,8 +190,9 @@ def make_demo_jpeg(path: Path, rng: random.Random, taken: datetime, make: str, m
     exif[0x8769] = {0x9003: taken.strftime("%Y:%m:%d %H:%M:%S")}
     if gps:
         lat, lon, _ = rng.choice(PLACES)
-        lat += rng.uniform(-0.05, 0.05)
-        lon += rng.uniform(-0.05, 0.05)
+        spread = 0.0004 if rng.random() < 0.6 else 0.05  # many shots at the same spots
+        lat += rng.uniform(-spread, spread)
+        lon += rng.uniform(-spread, spread)
         exif[0x8825] = {1: "N", 2: _deg_to_dms(lat), 3: "E", 4: _deg_to_dms(lon)}
     path.parent.mkdir(parents=True, exist_ok=True)
     img.save(path, "JPEG", quality=84, exif=exif.tobytes())
@@ -199,12 +219,16 @@ def make_demo_wav(path: Path, rng: random.Random, seconds: float) -> None:
 
 # ── generators ──────────────────────────────────────────────────────────
 class _People:
-    def __init__(self, rng: random.Random, n: int) -> None:
+    def __init__(self, rng: random.Random, n: int, ios: bool = False) -> None:
         self.rng = rng
-        people: list[tuple[str, str]] = []
-        used: set[str] = set()
+        people: list[tuple[str, str]] = [(ios_name if ios else name, number) for name, ios_name, number in SHARED_PEOPLE]
+        # Each demo owner has the other one saved.
+        people.append(("วิชัย มั่นคง", DEMO_ANDROID_NUMBER) if ios else ("สมชาย ใจดี", DEMO_IOS_NUMBER))
+        heavy = len(people)
+        used: set[str] = {p[0] for p in people}
         for nick in NICK:
-            people.append((nick, _thai_mobile(rng)))
+            if nick not in used:
+                people.append((nick, _thai_mobile(rng)))
         while len(people) < n - len(SERVICES):
             name = f"{rng.choice(FIRST)} {rng.choice(LAST)}"
             if name in used:
@@ -216,6 +240,8 @@ class _People:
         # A few people dominate communication, as in real data.
         self.weights = [max(1.0, 30 / (i + 1)) for i in range(len(people))]
         rng.shuffle(self.weights)
+        for i in range(heavy):
+            self.weights[i] = 26.0 - i * 1.6
 
     def pick(self) -> tuple[str, str]:
         return self.rng.choices(self.people, weights=self.weights, k=1)[0]
@@ -397,9 +423,15 @@ WIFI = [
 ]
 
 
-def _wifi(rng: random.Random, now: datetime) -> list[WifiNetwork]:
+IOS_WIFI = [("Somchai_Home_5G", "WPA3-SAE"), ("Grand Hotel Guest", "Open"), ("AIRPORT FREE WIFI", "Open"),
+            ("CentralWorld_WiFi", "Open"), ("Team-Office", "WPA2-PSK"), ("Mom-House", "WPA2-PSK")]
+
+
+def _wifi(rng: random.Random, now: datetime, ios: bool = False) -> list[WifiNetwork]:
     out = []
-    for ssid, sec in WIFI:
+    # The two demo owners share a few networks (same condo, same café): co-location evidence.
+    nets = WIFI[:5] + IOS_WIFI if ios else WIFI
+    for ssid, sec in nets:
         out.append(
             WifiNetwork(
                 ssid=ssid,
@@ -469,6 +501,7 @@ class DemoExtractor(BaseExtractor):
                 fingerprint="Redmi/serenity_global/serenity:15/AP3A.240905.015.A2/OS2.0.208.0.VGOMIXM:user/release-keys",
                 cpu_abi="arm64-v8a",
                 carrier="AIS",
+                phone_number=DEMO_ANDROID_NUMBER,
                 timezone="Asia/Bangkok",
                 battery_level=78,
                 battery_status="charging",
@@ -492,7 +525,7 @@ class DemoExtractor(BaseExtractor):
             build_id="22G100",
             imei="356789104512339",
             imei2="356789104598871",
-            phone_number="",
+            phone_number=DEMO_IOS_NUMBER,
             carrier="TrueMove H",
             timezone="Asia/Bangkok",
             battery_level=64,
@@ -509,7 +542,7 @@ class DemoExtractor(BaseExtractor):
         now = datetime.now().replace(microsecond=0)
         ios = self.platform == "ios"
         info = self.device_info()
-        people = _People(rng, 53 if not ios else 61)
+        people = _People(rng, 53 if not ios else 61, ios)
         ctx.audit("demo", "อุปกรณ์จำลอง: ข้อมูลทั้งหมดถูกสร้างขึ้นเพื่อการสาธิต")
         if ios:
             ctx.stage("backup", 0.0)
@@ -537,7 +570,7 @@ class DemoExtractor(BaseExtractor):
         step("chats", lambda: _chats(people, now, 555), None if ios else Unavailable.REQUIRES_ROOT.value)
         step("web", lambda: _web(rng, now, 140), None if ios else Unavailable.REQUIRES_ROOT.value)
         step("notes", lambda: _notes(now), None if ios else Unavailable.NOT_SUPPORTED.value)
-        step("wifi", lambda: _wifi(rng, now))
+        step("wifi", lambda: _wifi(rng, now, ios))
         step("sim", lambda: self._sims(rng, now, ios))
         step("apps", lambda: _apps(rng, now, ios))
         if ctx.wants("voice"):
@@ -551,6 +584,7 @@ class DemoExtractor(BaseExtractor):
     def _sims(self, rng: random.Random, now: datetime, ios: bool) -> list[SimCard]:
         carriers = [("AIS", "52001"), ("TrueMove H", "52004"), ("dtac", "52005")]
         n = 2 if ios else 5
+        own = DEMO_IOS_NUMBER if ios else DEMO_ANDROID_NUMBER
         out = []
         for i in range(n):
             carrier, mccmnc = carriers[i % 3]
@@ -559,7 +593,7 @@ class DemoExtractor(BaseExtractor):
                     slot=f"SIM {i + 1}" if i < 2 else "เคยใช้",
                     iccid="8966" + "".join(str(rng.randint(0, 9)) for _ in range(15)),
                     imsi=mccmnc + "".join(str(rng.randint(0, 9)) for _ in range(10)) if i < 2 else "",
-                    number=_thai_mobile(rng) if i < 2 else "",
+                    number=own if i == 0 else (_thai_mobile(rng) if i < 2 else ""),
                     carrier=carrier,
                     country="TH",
                     display_name=carrier,

@@ -15,6 +15,7 @@ dependencies = [
     "python-docx>=1.1",
     "pillow>=10.4",
     "pillow-heif>=0.18",
+    "networkx>=3.2",
 ]
 
 [project.optional-dependencies]

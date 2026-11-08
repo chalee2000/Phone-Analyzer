@@ -90,6 +90,14 @@ class CallRecord(Record):
     sim: str = ""
     service: str = "cellular"
     location: str = ""
+    # Filled by CDR imports (operator call detail records).
+    own_number: str = ""
+    cell: str = ""
+    cell_end: str = ""
+    site: str = ""
+    lat: float | None = None
+    lon: float | None = None
+    azimuth: int | None = None
 
 
 @dataclass

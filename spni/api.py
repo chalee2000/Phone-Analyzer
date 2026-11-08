@@ -22,6 +22,10 @@ from typing import Any, Callable
 
 from . import __version__, diagnostics
 from .android.adb import AdbManager
+from .analysis import comms as comms_mod
+from .analysis import network as network_mod
+from .analysis import timeline as timeline_mod
+from .case import workspace
 from .case.store import Case, CaseStore, default_cases_root
 from .demo import DEMO_ANDROID_ID, DEMO_IOS_ID, DemoExtractor, demo_devices
 from .events import EventBus
@@ -44,6 +48,9 @@ def endpoint(fn: Callable) -> Callable:
             return {"ok": True, "data": fn(self, *args, **kwargs)}
         except ApiError as exc:
             return {"ok": False, "error": exc.code, "message": exc.message}
+        except ValueError as exc:
+            code = str(exc) if str(exc).replace("_", "").isalnum() else "invalid"
+            return {"ok": False, "error": code, "message": str(exc)}
         except Exception as exc:  # unexpected: report, never crash the UI
             traceback.print_exc()
             return {"ok": False, "error": "internal", "message": f"{type(exc).__name__}: {exc}"}
@@ -425,3 +432,159 @@ class Api:
     @endpoint
     def restart_adb(self) -> bool:
         return self._adb.restart_server()
+
+    # ── analysis: shared ─────────────────────────────────────────────────
+    def _require_case(self) -> Case:
+        if not self._case:
+            raise ApiError("no_case")
+        return self._case
+
+    def _ensure_case(self) -> Case:
+        if not self._case:
+            self._case = self._store.create_case({"title": "งานด่วน", "case_no": "", "note": "สร้างอัตโนมัติ"})
+            self._bus.emit("case.opened", self._case.meta())
+        return self._case
+
+    def _saved(self, path: Path) -> dict[str, Any]:
+        return {"path": str(path), "name": path.name}
+
+    @endpoint
+    def case_devices(self) -> list[dict[str, Any]]:
+        case = self._require_case()
+        return [comms_mod.device_entry(e, i) for i, e in enumerate(comms_mod.extractions(case))]
+
+    # ── network analysis ─────────────────────────────────────────────────
+    @endpoint
+    def network_graph(self, options: dict[str, Any] | None = None) -> dict[str, Any]:
+        return network_mod.build(self._require_case(), options)
+
+    @endpoint
+    def network_evidence(self, element_id: str) -> list[dict[str, Any]]:
+        return network_mod.evidence(self._require_case(), element_id)
+
+    @endpoint
+    def network_annotate(self, node_id: str, label: str = "", note: str = "", tags: list[str] | None = None) -> dict[str, Any]:
+        return workspace.set_annotation(self._require_case(), node_id, label, note, tags or [])
+
+    @endpoint
+    def network_add_entity(self, entity: dict[str, Any], link_to: list[str] | None = None, link_label: str = "") -> dict[str, Any]:
+        case = self._require_case()
+        ent = workspace.add_entity(case, entity.get("type", "other"), entity.get("label", ""), entity.get("note", ""))
+        for target in link_to or []:
+            workspace.add_link(case, f"man:{ent['id']}", target, link_label)
+        return {**ent, "node_id": f"man:{ent['id']}"}
+
+    @endpoint
+    def network_add_link(self, source: str, target: str, label: str = "") -> dict[str, Any]:
+        return workspace.add_link(self._require_case(), source, target, label)
+
+    @endpoint
+    def network_delete_manual(self, item_id: str) -> None:
+        workspace.delete_manual(self._require_case(), item_id)
+
+    @endpoint
+    def network_save_layout(self, positions: dict[str, Any]) -> None:
+        workspace.save_layout(self._require_case(), positions)
+
+    @endpoint
+    def network_load_layout(self) -> dict[str, Any]:
+        return workspace.load_layout(self._require_case())
+
+    @endpoint
+    def export_network(self, fmt: str, options: dict[str, Any] | None = None, positions: dict[str, Any] | None = None) -> dict[str, Any]:
+        from .export.analysis import export_network
+
+        case = self._require_case()
+        graph = network_mod.build(case, options)
+        path = export_network(fmt, graph, case.meta(), case.path / "reports", positions)
+        workspace.audit(case, f"export.network.{fmt}", path.name)
+        return self._saved(path)
+
+    @endpoint
+    def save_chart_image(self, data_url: str, label: str = "Network") -> dict[str, Any]:
+        from .export.analysis import save_png
+
+        case = self._require_case()
+        path = save_png(data_url, case.meta(), case.path / "reports", label)
+        workspace.audit(case, "export.chart.png", path.name)
+        return self._saved(path)
+
+    # ── timeline ────────────────────────────────────────────────────────
+    @endpoint
+    def timeline(self, options: dict[str, Any] | None = None) -> dict[str, Any]:
+        options = options or {}
+        return timeline_mod.build(self._require_case(), options.get("extractions"), bool(options.get("system_apps")))
+
+    @endpoint
+    def timeline_save_entry(self, entry: dict[str, Any]) -> dict[str, Any]:
+        return workspace.save_entry(self._require_case(), entry)
+
+    @endpoint
+    def timeline_delete_entry(self, entry_id: str) -> None:
+        workspace.delete_entry(self._require_case(), entry_id)
+
+    @endpoint
+    def timeline_bookmark(self, event_id: str, on: bool, note: str = "") -> None:
+        workspace.set_bookmark(self._require_case(), event_id, bool(on), note)
+
+    @endpoint
+    def export_timeline(self, fmt: str, ids: list[str] | None = None, options: dict[str, Any] | None = None) -> dict[str, Any]:
+        from .export.analysis import export_timeline
+
+        case = self._require_case()
+        data = timeline_mod.build(case, (options or {}).get("extractions"), bool((options or {}).get("system_apps")))
+        events = data["events"]
+        if ids is not None:
+            wanted = set(ids)
+            events = [e for e in events if e["id"] in wanted]
+        devices = {d["id"]: d["label"] for d in data["devices"]}
+        path = export_timeline(fmt, events, devices, case.meta(), case.path / "reports")
+        workspace.audit(case, f"export.timeline.{fmt}", f"{path.name} ({len(events)} events)")
+        return self._saved(path)
+
+    # ── call & contact analysis ─────────────────────────────────────────
+    @endpoint
+    def comm_analysis(self, options: dict[str, Any] | None = None) -> dict[str, Any]:
+        return comms_mod.comm_rows(self._require_case(), (options or {}).get("extractions"))
+
+    @endpoint
+    def export_comms(self, ids: list[str] | None = None) -> dict[str, Any]:
+        from .export.analysis import export_comms
+
+        case = self._require_case()
+        data = comms_mod.comm_rows(case)
+        rows = data["rows"]
+        if ids is not None:
+            wanted = set(ids)
+            rows = [r for r in rows if r["id"] in wanted]
+        devices = {d["id"]: d["label"] for d in data["devices"]}
+        path = export_comms(rows, comms_mod.summarize(rows), devices, case.meta(), case.path / "reports")
+        workspace.audit(case, "export.comms.xlsx", f"{path.name} ({len(rows)} rows)")
+        return self._saved(path)
+
+    def _import_cdr(self, name: str, raw: bytes) -> dict[str, Any]:
+        from . import cdr
+
+        with self._lock:
+            if self._job:
+                raise ApiError("busy")
+            case = self._ensure_case()
+        result = cdr.import_into(case, name, raw)
+        if not self._extraction_id:
+            self._extraction_id = result["extraction_id"]
+        self._bus.emit("case.opened", case.meta())
+        return result
+
+    @endpoint
+    def import_cdr(self, name: str, data_b64: str) -> dict[str, Any]:
+        import base64
+
+        return self._import_cdr(name, base64.b64decode(data_b64.split(",", 1)[-1]))
+
+    @endpoint
+    def import_demo_cdr(self) -> dict[str, Any]:
+        from . import cdr
+        from .demo import DEMO_ANDROID_NUMBER, cdr_partners
+
+        data = cdr.demo_cdr_bytes(DEMO_ANDROID_NUMBER, cdr_partners())
+        return self._import_cdr(f"demo_cdr_{DEMO_ANDROID_NUMBER}.csv", data)
