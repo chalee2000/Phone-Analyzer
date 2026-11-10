@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import os
 from pathlib import Path, PurePosixPath
+from typing import Any
 
 from ..extract import BaseExtractor, ExtractionContext
-from ..media import IMAGE_EXTS
+from ..media import IMAGE_EXTS, sniff_ext
 from ..models import App, DeviceInfo, Unavailable
+from ..util import safe_name
 from . import device, parsers
 from .backup import BackupReader, BackupResult, make_backup, open_reader
 
@@ -117,6 +119,7 @@ class IOSExtractor(BaseExtractor):
 
     def _parse(self, ctx: ExtractionContext, reader: BackupReader, result: BackupResult) -> None:
         names: dict[str, str] = {}
+        self._extra_photos = []  # LINE pictures found while parsing chats
 
         def run(kind: str, fn):
             if not ctx.wants(kind):
@@ -147,14 +150,14 @@ class IOSExtractor(BaseExtractor):
         run("contacts", contacts)
         run("calls", lambda: from_db(parsers.CALLS_DB, lambda p: parsers.parse_calls(p, names)))
         run("sms", lambda: from_db(parsers.SMS_DB, lambda p: parsers.parse_sms(p, names)))
-        run("chats", lambda: self._chats(reader))
+        run("chats", lambda: self._chats(ctx, reader))
         run("web", lambda: from_db(parsers.SAFARI_DB, parsers.parse_safari))
         run("notes", lambda: from_db(parsers.NOTES_DB, parsers.parse_notes))
         run("wifi", lambda: self._wifi(reader))
         run("voice", lambda: self._voice(ctx, reader))
         run("photos", lambda: self._photos(ctx, reader))
 
-    def _chats(self, reader: BackupReader):
+    def _chats(self, ctx: ExtractionContext, reader: BackupReader):
         found = False
         messages = []
         path = reader.get(*parsers.WHATSAPP_DB)
@@ -162,14 +165,57 @@ class IOSExtractor(BaseExtractor):
             found = True
             messages += parsers.parse_whatsapp(path)
         for row in reader.find("%line%", "%Line.sqlite"):
-            local = reader.extract_row(row, reader.work / row["domain"] / row["relativePath"])
+            local = reader.extract_sqlite(row)
             if local:
                 found = True
-                messages += parsers.parse_line(local)
+                messages += self._line(ctx, reader, row, local)
         if not found:
             return None
         messages.sort(key=lambda m: m.timestamp or 0, reverse=True)
         return messages
+
+    def _line(self, ctx: ExtractionContext, reader: BackupReader, db_row, local: Path) -> list:
+        """LINE messages plus the photos, videos, voice clips and files kept on the phone.
+
+        LINE stores media under ``…/PrivateStore/P_<id>/Message Attachments/<chat>/<message id>``
+        (no file extension; ``.thumb`` for previews). Only media the user opened or
+        downloaded is on the phone, so some messages keep just their label.
+        """
+        items = parsers.parse_line_full(local)
+        wanted = {sid for _, sid, ct in items if sid and ct in parsers.LINE_MEDIA}
+        index: dict[str, dict[str, Any]] = {}
+        if wanted:
+            for a in reader.query("domain = ? AND relativePath LIKE ?", (db_row["domain"], "%Message Attachments/%")):
+                name = PurePosixPath(a["relativePath"]).name
+                thumb = "thumb" in name.lower()
+                stem = name.split(".")[0].removesuffix("_thumb")
+                if stem in wanted:
+                    index.setdefault(stem, {})["thumb" if thumb else "file"] = a
+        copied = 0
+        for i, (msg, sid, ct) in enumerate(items):
+            entry = index.get(sid)
+            if not entry:
+                continue
+            if i % 50 == 0:
+                ctx.progress("chats", i / max(1, len(items)))
+            row = entry.get("file") or entry["thumb"]
+            folder = ctx.extraction.media_dir / "line" / safe_name(msg.thread, "chat")[:40]
+            tmp = reader.extract_row(row, folder / f"{sid}{'' if 'file' in entry else '_thumb'}.part")
+            if not tmp:
+                continue
+            final = tmp.with_suffix(sniff_ext(tmp) or ".bin")
+            tmp.replace(final)
+            source = f"{row['domain']}/{row['relativePath']}"
+            copied += 1
+            if ct == parsers.LINE_IMAGE and final.suffix in IMAGE_EXTS:
+                photo = ctx.photo_record(final, source, album=f"LINE: {msg.thread}", modified=msg.timestamp)
+                self._extra_photos.append(photo)
+                msg.attachment = photo.path
+            else:
+                ctx.register(final, source)
+                msg.attachment = ctx.extraction.rel(final)
+        ctx.audit("ios.line", f"{local.name}: {len(items)} messages, media on phone {copied}/{len(wanted)}")
+        return [m for m, _, _ in items]
 
     def _wifi(self, reader: BackupReader):
         rows = reader.find("%", "%com.apple.wifi-networks.plist") or reader.find("%", "%com.apple.wifi.plist")
@@ -223,5 +269,6 @@ class IOSExtractor(BaseExtractor):
             if mtime:
                 os.utime(local, (mtime, mtime))
             photos.append(ctx.photo_record(local, f"/private/var/mobile/{rel}", album=rel.parent.name, modified=mtime * 1000 if mtime else None))
+        photos += getattr(self, "_extra_photos", [])
         photos.sort(key=lambda p: p.taken or 0, reverse=True)
         return photos

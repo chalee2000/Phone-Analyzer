@@ -111,11 +111,20 @@ class BackupReader:
         dest = self.work / domain / relative_path
         if dest.is_file():
             return dest
-        path = self.extract_row(rows[0], dest)
+        return self.extract_sqlite(rows[0])
+
+    def extract_sqlite(self, row: sqlite3.Row) -> Path | None:
+        """Extract a database together with its -wal / -shm files.
+
+        SQLite write-ahead logs hold recent rows that are not yet checkpointed
+        into the main file (for chat apps: the newest messages).
+        """
+        domain, rel = row["domain"], row["relativePath"]
+        dest = self.work / domain / rel
+        path = self.extract_row(row, dest)
         if path is not None:
-            # SQLite write-ahead logs hold recent, not yet checkpointed rows.
             for suffix in ("-wal", "-shm"):
-                extra = self.query("domain = ? AND relativePath = ?", (domain, relative_path + suffix))
+                extra = self.query("domain = ? AND relativePath = ?", (domain, rel + suffix))
                 if extra:
                     self.extract_row(extra[0], Path(str(dest) + suffix))
         return path

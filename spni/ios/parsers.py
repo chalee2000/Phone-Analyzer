@@ -8,6 +8,7 @@ only use columns that exist.
 from __future__ import annotations
 
 import gzip
+import json
 import plistlib
 import sqlite3
 from pathlib import Path
@@ -373,32 +374,183 @@ def parse_whatsapp(path: Path) -> list[ChatMessage]:
     return out
 
 
-def parse_line(path: Path) -> list[ChatMessage]:
-    """LINE (Line.sqlite). Schema is undocumented; parsed on a best-effort basis."""
-    db = connect(path)
-    out = []
+# LINE message content types (LINE protocol ContentType).
+LINE_IMAGE, LINE_VIDEO, LINE_AUDIO, LINE_CALL, LINE_STICKER, LINE_CONTACT, LINE_FILE, LINE_LOCATION, LINE_EVENT = 1, 2, 3, 6, 7, 13, 14, 15, 18
+LINE_MEDIA = {LINE_IMAGE, LINE_VIDEO, LINE_AUDIO, LINE_FILE}
+
+
+def _unarchive_dict(archive: dict[str, Any]) -> dict[str, Any]:
+    """Top-level NSDictionary of an NSKeyedArchiver plist, values resolved one level."""
+    objs = archive.get("$objects", [])
+
+    def val(x: Any) -> Any:
+        if isinstance(x, plistlib.UID):
+            x = objs[x.data] if x.data < len(objs) else None
+        return None if x == "$null" else x
+
+    top = val((archive.get("$top") or {}).get("root"))
+    if isinstance(top, dict) and "NS.keys" in top:
+        return {str(val(k)): val(v) for k, v in zip(top["NS.keys"], top.get("NS.objects", []))}
+    return {}
+
+
+def line_metadata(blob: Any) -> dict[str, Any]:
+    """ZCONTENTMETADATA: JSON, a plist dict or a keyed archive depending on the LINE version."""
+    if not blob:
+        return {}
+    if isinstance(blob, str):
+        blob = blob.encode("utf-8", "replace")
     try:
-        users = {r["Z_PK"]: (r["ZCUSTOMNAME"] or r["ZNAME"] or "") for r in db.execute("SELECT Z_PK, ZNAME, ZCUSTOMNAME FROM ZUSER")}
-        chat_cols = columns(db, "ZCHAT")
-        chat_name = pick(chat_cols, "ZNAME", "ZMID")
-        chats = {r["Z_PK"]: r["n"] for r in db.execute(f"SELECT Z_PK, {chat_name} AS n FROM ZCHAT")}
-        for r in db.execute("SELECT ZTEXT, ZTIMESTAMP, ZSENDER, ZCHAT FROM ZMESSAGE WHERE ZTEXT IS NOT NULL"):
-            mine = r["ZSENDER"] is None
-            thread = chats.get(r["ZCHAT"]) or ""
-            out.append(
-                ChatMessage(
-                    app="LINE",
-                    thread=str(thread),
-                    sender="ฉัน" if mine else users.get(r["ZSENDER"], ""),
-                    body=r["ZTEXT"],
-                    direction="out" if mine else "in",
-                    timestamp=unix_to_ms(r["ZTIMESTAMP"]),
-                )
-            )
-    except sqlite3.Error:
+        data = json.loads(blob)
+        return data if isinstance(data, dict) else {}
+    except (ValueError, UnicodeDecodeError):
         pass
-    db.close()
+    try:
+        data = plistlib.loads(blob)
+    except Exception:
+        return {}
+    if isinstance(data, dict) and "$objects" in data:
+        return _unarchive_dict(data)
+    return data if isinstance(data, dict) else {}
+
+
+def _clock_ms(value: Any) -> str:
+    try:
+        sec = int(float(value)) // 1000
+    except (TypeError, ValueError):
+        return ""
+    if sec <= 0:
+        return ""
+    h, rem = divmod(sec, 3600)
+    m, s = divmod(rem, 60)
+    return f"{h}:{m:02d}:{s:02d}" if h else f"{m}:{s:02d}"
+
+
+def _line_body(ct: int, text: str, meta: dict[str, Any], lat: Any, lon: Any) -> str:
+    def g(*keys: str) -> Any:
+        return next((meta[k] for k in keys if meta.get(k) not in (None, "")), None)
+
+    def with_clock(label: str, value: Any) -> str:
+        clock = _clock_ms(value)
+        return f"{label} {clock}" if clock else label
+
+    if ct == 0:
+        return text
+    if ct == LINE_IMAGE:
+        return "[รูปภาพ]"
+    if ct == LINE_VIDEO:
+        return with_clock("[วิดีโอ]", g("DURATION", "duration"))
+    if ct == LINE_AUDIO:
+        return with_clock("[ข้อความเสียง]", g("AUDLEN", "DURATION", "duration"))
+    if ct == LINE_CALL:
+        video = str(g("TYPE", "type") or "").upper().startswith("V")
+        label = "วิดีโอคอลผ่าน LINE" if video else "โทรผ่าน LINE"
+        clock = _clock_ms(g("DURATION", "duration"))
+        return f"[{label} {clock}]" if clock else f"[{label}]"
+    if ct == LINE_STICKER:
+        caption = g("STKTXT")
+        return f"[สติกเกอร์] {caption}" if caption else "[สติกเกอร์]"
+    if ct == LINE_CONTACT:
+        return f"[ผู้ติดต่อ] {g('displayName', 'DISPLAY_NAME') or ''}".strip()
+    if ct == LINE_FILE:
+        return f"[ไฟล์] {g('FILE_NAME', 'fileName') or ''}".strip()
+    if ct == LINE_LOCATION:
+        place = f"[ตำแหน่ง] {text}".strip()
+        try:
+            la, lo = float(lat), float(lon)
+            if la or lo:
+                place += f" ({la:.5f}, {lo:.5f})"
+        except (TypeError, ValueError):
+            pass
+        return place
+    if ct == LINE_EVENT:
+        return f"[ห้องสนทนา] {text}" if text else ""
+    return text or f"[ข้อความ LINE ประเภท {ct}]"
+
+
+def parse_line_full(path: Path) -> list[tuple[ChatMessage, str, int]]:
+    """LINE (Line.sqlite, Core Data). Returns (message, server message id, content type).
+
+    The schema is undocumented and changes between versions, so every column is
+    optional. Chats are named from the contact (1:1), the group table (groups)
+    or the people who wrote in it (multi-person rooms).
+    """
+    db = connect(path)
+    try:
+        mcols = columns(db, "ZMESSAGE")
+        if not mcols:
+            return []
+        ucols = columns(db, "ZUSER")
+        by_pk: dict[Any, str] = {}
+        by_mid: dict[str, str] = {}
+        if ucols:
+            sel = ", ".join(c for c in ("Z_PK", "ZMID", "ZNAME", "ZCUSTOMNAME", "ZADDRESSBOOKNAME") if c in ucols)
+            for r in db.execute(f"SELECT {sel} FROM ZUSER"):
+                d = dict(r)
+                name = d.get("ZCUSTOMNAME") or d.get("ZADDRESSBOOKNAME") or d.get("ZNAME") or d.get("ZMID") or ""
+                by_pk[d.get("Z_PK")] = name
+                if d.get("ZMID"):
+                    by_mid[d["ZMID"]] = name
+        groups: dict[str, str] = {}
+        gcols = columns(db, "ZGROUP")
+        if gcols:
+            for r in db.execute(f"SELECT {pick(gcols, 'ZID', 'ZMID')} AS id, {pick(gcols, 'ZNAME')} AS name FROM ZGROUP"):
+                if r["id"]:
+                    groups[r["id"]] = r["name"] or ""
+        ccols = columns(db, "ZCHAT")
+        chats: dict[Any, dict[str, Any]] = {}
+        if ccols:
+            for r in db.execute(f"SELECT Z_PK, {pick(ccols, 'ZMID')} AS mid, {pick(ccols, 'ZNAME')} AS name FROM ZCHAT"):
+                chats[r["Z_PK"]] = dict(r)
+        rows = db.execute(
+            f"SELECT {pick(mcols, 'ZCHAT')} AS chat, {pick(mcols, 'ZSENDER')} AS sender, {pick(mcols, 'ZTEXT')} AS text, "
+            f"{pick(mcols, 'ZTIMESTAMP')} AS ts, {pick(mcols, 'ZCONTENTTYPE')} AS ct, {pick(mcols, 'ZID', 'ZSERVERID')} AS sid, "
+            f"{pick(mcols, 'ZCONTENTMETADATA')} AS meta, {pick(mcols, 'ZLATITUDE')} AS lat, {pick(mcols, 'ZLONGITUDE')} AS lon FROM ZMESSAGE"
+        ).fetchall()
+    except sqlite3.Error:
+        return []
+    finally:
+        db.close()
+
+    writers: dict[Any, list[str]] = {}
+    for r in rows:
+        name = by_pk.get(r["sender"]) if r["sender"] is not None else None
+        if name and name not in writers.setdefault(r["chat"], []):
+            writers[r["chat"]].append(name)
+
+    def title(chat_pk: Any) -> str:
+        c = chats.get(chat_pk) or {}
+        mid = c.get("mid") or ""
+        return c.get("name") or by_mid.get(mid) or groups.get(mid) or ", ".join(writers.get(chat_pk, [])[:3]) or mid or "LINE"
+
+    out: list[tuple[ChatMessage, str, int]] = []
+    for r in rows:
+        try:
+            ct = int(r["ct"] or 0)
+        except (TypeError, ValueError):
+            ct = 0
+        body = _line_body(ct, r["text"] or "", line_metadata(r["meta"]), r["lat"], r["lon"])
+        if not body:
+            continue
+        mine = r["sender"] is None
+        thread = title(r["chat"])
+        out.append((
+            ChatMessage(
+                app="LINE",
+                thread=thread,
+                sender="ฉัน" if mine else (by_pk.get(r["sender"]) or thread),
+                body=body,
+                direction="out" if mine else "in",
+                timestamp=unix_to_ms(r["ts"]),
+            ),
+            str(r["sid"] or ""),
+            ct,
+        ))
     return out
+
+
+def parse_line(path: Path) -> list[ChatMessage]:
+    return [m for m, _, _ in parse_line_full(path)]
 
 
 # ── Voice memos ─────────────────────────────────────────────────────────

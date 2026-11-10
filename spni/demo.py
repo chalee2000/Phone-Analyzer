@@ -35,6 +35,7 @@ from .models import (
     WebVisit,
     WifiNetwork,
 )
+from .util import safe_name
 
 DEMO_ANDROID_ID = "demo:android"
 DEMO_IOS_ID = "demo:ios"
@@ -543,6 +544,7 @@ class DemoExtractor(BaseExtractor):
         ios = self.platform == "ios"
         info = self.device_info()
         people = _People(rng, 53 if not ios else 61, ios)
+        self._line_photos: list = []
         ctx.audit("demo", "อุปกรณ์จำลอง: ข้อมูลทั้งหมดถูกสร้างขึ้นเพื่อการสาธิต")
         if ios:
             ctx.stage("backup", 0.0)
@@ -567,7 +569,7 @@ class DemoExtractor(BaseExtractor):
         step("contacts", lambda: _contacts(people, account))
         step("calls", lambda: _calls(people, now, 222 if not ios else 318, ios))
         step("sms", lambda: _sms(people, now, 633 if not ios else 480, ios))
-        step("chats", lambda: _chats(people, now, 555), None if ios else Unavailable.REQUIRES_ROOT.value)
+        step("chats", lambda: self._chat_records(ctx, people, now, ios), None if ios else Unavailable.REQUIRES_ROOT.value)
         step("web", lambda: _web(rng, now, 140), None if ios else Unavailable.REQUIRES_ROOT.value)
         step("notes", lambda: _notes(now), None if ios else Unavailable.NOT_SUPPORTED.value)
         step("wifi", lambda: _wifi(rng, now, ios))
@@ -580,6 +582,25 @@ class DemoExtractor(BaseExtractor):
             ctx.begin("photos")
             ctx.save("photos", self._photos(ctx, rng, now, ios))
         return info
+
+    def _chat_records(self, ctx: ExtractionContext, people: "_People", now: datetime, ios: bool) -> list[ChatMessage]:
+        msgs = _chats(people, now, 555)
+        if not ios:
+            return msgs
+        # LINE pictures as an iPhone backup provides them (Message Attachments, no extension).
+        rng = random.Random(self.seed + 7)  # separate stream: the rest of the demo stays identical
+        for m in msgs:
+            if m.app != "LINE" or m.attachment != "image.jpg":
+                continue
+            sid = str(rng.randint(10**14, 10**15 - 1))
+            local = ctx.extraction.media_dir / "line" / safe_name(m.thread, "chat")[:40] / f"{sid}.jpg"
+            local.parent.mkdir(parents=True, exist_ok=True)
+            render_scene(rng, 720, 540).save(local, "JPEG", quality=82)
+            src = f"AppDomainGroup-group.com.linecorp.line/Library/Application Support/PrivateStore/P_demo/Message Attachments/c{sid[:8]}/{sid}"
+            photo = ctx.photo_record(local, src, album=f"LINE: {m.thread}", modified=m.timestamp)
+            self._line_photos.append(photo)
+            m.attachment = photo.path
+        return msgs
 
     def _sims(self, rng: random.Random, now: datetime, ios: bool) -> list[SimCard]:
         carriers = [("AIS", "52001"), ("TrueMove H", "52004"), ("dtac", "52005")]
@@ -633,6 +654,7 @@ class DemoExtractor(BaseExtractor):
             src = ("/private/var/mobile/Media/DCIM/100APPLE/" if ios else f"/sdcard/DCIM/{album}/") + name
             photos.append(ctx.photo_record(local, src, album=album, modified=_ms(taken)))
             _sleep(0.01)
+        photos += getattr(self, "_line_photos", [])
         photos.sort(key=lambda p: p.taken or 0, reverse=True)
         return photos
 

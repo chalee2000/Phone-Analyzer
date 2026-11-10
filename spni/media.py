@@ -93,3 +93,40 @@ def make_thumbnail(src: Path, dst: Path, size: int = 360) -> bool:
         return True
     except Exception:
         return False
+
+
+def sniff_ext(path: Path) -> str:
+    """File extension from the first bytes, for app media stored without one."""
+    try:
+        with open(path, "rb") as fh:
+            head = fh.read(16)
+    except OSError:
+        return ""
+    if head.startswith(b"\xff\xd8\xff"):
+        return ".jpg"
+    if head.startswith(b"\x89PNG"):
+        return ".png"
+    if head.startswith(b"GIF8"):
+        return ".gif"
+    if head.startswith(b"RIFF") and head[8:12] == b"WEBP":
+        return ".webp"
+    if head[4:8] == b"ftyp":
+        brand = head[8:12]
+        if brand in (b"M4A ", b"M4B "):
+            return ".m4a"
+        if brand in (b"heic", b"heix", b"mif1", b"msf1"):
+            return ".heic"
+        if brand == b"qt  ":
+            return ".mov"
+        return ".mp4"
+    if head.startswith(b"#!AMR"):
+        return ".amr"
+    if head.startswith(b"ID3") or head[:2] == b"\xff\xfb":
+        return ".mp3"
+    if head[:2] in (b"\xff\xf1", b"\xff\xf9"):
+        return ".aac"
+    if head.startswith(b"%PDF"):
+        return ".pdf"
+    if head.startswith(b"PK\x03\x04"):
+        return ".zip"
+    return ""
