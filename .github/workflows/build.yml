@@ -101,6 +101,8 @@ jobs:
       - name: UI check in the real window (WebView2)
         continue-on-error: true
         timeout-minutes: 12
+        env:
+          PYTHONIOENCODING: utf-8
         run: |
           pip install "websocket-client>=1.6"
           python scripts/ui_check.py "dist/Phone Analysis/Phone Analysis.exe" ui-check

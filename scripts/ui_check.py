@@ -75,6 +75,8 @@ READY = "!!(window.pywebview && window.pywebview.api && window.pywebview.api.con
 
 
 def main() -> int:
+    # The Windows runner's console is cp1252; the result holds Thai text.
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[union-attr]
     exe, out = Path(sys.argv[1]), Path(sys.argv[2])
     out.mkdir(parents=True, exist_ok=True)
     cases = Path(tempfile.mkdtemp(prefix="pa-cases-"))
