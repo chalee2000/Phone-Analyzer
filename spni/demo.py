@@ -617,6 +617,29 @@ class DemoExtractor(BaseExtractor):
         ctx.audit("line.export", f"{len(chats)} LINE chat exports on the phone, owner={owner}")
         return line_export.to_messages(chats, owner)
 
+    def _line_app_media(self, ctx: ExtractionContext, now: datetime) -> list:
+        """Android: LINE's own media folder (received pictures and a voice clip, no extensions)."""
+        from .models import Photo
+
+        rng = random.Random(self.seed + 11)
+        base = "/sdcard/Android/data/jp.naver.line.android/files/storage/mo"
+        out = []
+        for i in range(6):
+            taken = _random_time(rng, now, 20)
+            mid = str(rng.randint(10**14, 10**15 - 1))
+            local = ctx.extraction.media_dir / "line_app" / "storage" / "mo" / f"{mid}.jpg"
+            local.parent.mkdir(parents=True, exist_ok=True)
+            render_scene(rng, 720, 540).save(local, "JPEG", quality=82)
+            out.append(ctx.photo_record(local, f"{base}/{mid}", album="LINE (ในแอป)", modified=_ms(taken)))
+        taken = _random_time(rng, now, 10)
+        mid = str(rng.randint(10**14, 10**15 - 1))
+        local = ctx.extraction.media_dir / "line_app" / "storage" / "mo" / f"{mid}.wav"
+        make_demo_wav(local, rng, 3.0)
+        digest = ctx.register(local, f"{base}/{mid}")
+        out.append(Photo(name=local.name, path=ctx.extraction.rel(local), size=local.stat().st_size, taken=_ms(taken),
+                         modified=_ms(taken), album="LINE (ในแอป)", sha256=digest, source_path=f"{base}/{mid}", kind="audio"))
+        return out
+
     def _sims(self, rng: random.Random, now: datetime, ios: bool) -> list[SimCard]:
         carriers = [("AIS", "52001"), ("TrueMove H", "52004"), ("dtac", "52005")]
         n = 2 if ios else 5
@@ -670,6 +693,8 @@ class DemoExtractor(BaseExtractor):
             photos.append(ctx.photo_record(local, src, album=album, modified=_ms(taken)))
             _sleep(0.01)
         photos += getattr(self, "_line_photos", [])
+        if not ios:
+            photos += self._line_app_media(ctx, now)
         photos.sort(key=lambda p: p.taken or 0, reverse=True)
         return photos
 

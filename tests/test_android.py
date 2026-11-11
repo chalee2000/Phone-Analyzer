@@ -1,6 +1,7 @@
 """Android extraction against a fake device that replays realistic ADB output."""
 
 import re
+import shlex
 from pathlib import Path
 
 import pytest
@@ -74,10 +75,13 @@ DENIED = "Error while accessing provider:sms\njava.lang.SecurityException: Permi
 class FakeDevice:
     serial = "9b01005930533036340014e659ae3c"
 
-    def __init__(self, deny_sms: bool = False, files: dict | None = None, contents: dict | None = None):
+    def __init__(self, deny_sms: bool = False, files: dict | None = None, contents: dict | None = None,
+                 app_files: dict | None = None, deny_app_dir: bool = False):
         self.deny_sms = deny_sms
-        self.files = files or {}
+        self.files = files or {}  # shared storage: path -> (size, mtime)
         self.contents = contents or {}  # remote path -> bytes (anything else pulls as a JPEG)
+        self.app_files = app_files or {}  # LINE's Android/data folder: path -> (size, mtime)
+        self.deny_app_dir = deny_app_dir
         self.commands: list[str] = []
 
     def shell(self, cmd: str, timeout: float = 120) -> str:
@@ -105,8 +109,20 @@ class FakeDevice:
         if cmd.startswith("head -c "):
             path = cmd.split(" ", 3)[3].strip("'")
             return self.contents.get(path, b"")[:64].decode("utf-8", "replace")
+        if cmd.startswith("ls -d /sdcard/Android/data/"):
+            path = cmd.split()[2]
+            if self.deny_app_dir:
+                return f"ls: {path}: Permission denied"
+            return path if self.app_files else f"ls: {path}: No such file or directory"
+        if "od -An" in cmd:  # LINE app folder probe: size|mtime|path|first 16 bytes as hex
+            return "\n".join(f"{size}|{mtime}|{path}|{self.contents.get(path, b'')[:16].hex()}" for path, (size, mtime) in self.app_files.items())
         if cmd.startswith("find "):
-            return "\n".join(f"{size}|{mtime}|{path}" for path, (size, mtime) in self.files.items())
+            exts = re.findall(r"-iname '\*(\.[^']+)'", cmd)
+            dirs = [d.rstrip("/") for d in shlex.split(cmd[5:].split(" -type")[0])]
+            return "\n".join(
+                f"{size}|{mtime}|{path}" for path, (size, mtime) in self.files.items()
+                if any(path.startswith(d + "/") for d in dirs) and (not exts or any(path.lower().endswith(e) for e in exts))
+            )
         return ""
 
     def pull(self, remote: str, local: Path) -> None:
@@ -207,3 +223,65 @@ def test_parcel_imei():
   0x00000010: 00390038 00310030 00350034 00320031 '8.9.0.1.4.5.1.2.'
   0x00000020: 00330033 00000039                   '3.3.9...        ')"""
     assert re.fullmatch(r"\d{15}", parse_parcel_string(out))
+
+
+# ── LINE media without root ─────────────────────────────────────────────
+def _jpeg() -> bytes:
+    import io
+
+    from PIL import Image
+
+    buf = io.BytesIO()
+    Image.new("RGB", (40, 30), (20, 160, 90)).save(buf, "JPEG")
+    return buf.getvalue()
+
+
+LINE_APP = "/sdcard/Android/data/jp.naver.line.android"
+
+
+def test_line_media_from_shared_storage_and_app_folder(tmp_path):
+    jpg = _jpeg()
+    mp4 = b"\x00\x00\x00\x20ftypisom" + b"\x00" * 30000
+    aac = b"\xff\xf1\x50\x80" + b"\x00" * 20000
+    t = 1762790400
+    dev = FakeDevice(
+        files={
+            "/sdcard/DCIM/Camera/IMG_1.jpg": (1000, t),
+            "/sdcard/Pictures/LINE/LINE_P1.jpg": (1000, t),
+            "/sdcard/Movies/LINE/LINE_MOVIE_1.mp4": (len(mp4), t + 1),
+        },
+        contents={
+            "/sdcard/Movies/LINE/LINE_MOVIE_1.mp4": mp4,
+            f"{LINE_APP}/files/storage/mo/1001": jpg,
+            f"{LINE_APP}/files/storage/mo/1002": mp4,
+            f"{LINE_APP}/files/storage/mo/1003": aac,
+            f"{LINE_APP}/cache/sticker/55": jpg,
+        },
+        app_files={
+            f"{LINE_APP}/files/storage/mo/1001": (len(jpg) + 9000, t + 2),
+            f"{LINE_APP}/files/storage/mo/1002": (len(mp4), t + 3),
+            f"{LINE_APP}/files/storage/mo/1003": (len(aac), t + 4),
+            f"{LINE_APP}/cache/sticker/55": (len(jpg) + 9000, t + 5),
+        },
+    )
+    ctx, case, _ = make_ctx(tmp_path, ["photos"])
+    AndroidExtractor(dev).run(ctx)
+    photos = {p["source_path"]: p for p in case.records(ctx.extraction.id, "photos")}
+    assert photos["/sdcard/Pictures/LINE/LINE_P1.jpg"]["album"] == "LINE"  # pulled once, by the normal photo pass
+    video = photos["/sdcard/Movies/LINE/LINE_MOVIE_1.mp4"]
+    assert video["kind"] == "video" and video["album"] == "LINE" and len(video["sha256"]) == 64
+    app_img = photos[f"{LINE_APP}/files/storage/mo/1001"]
+    assert app_img["kind"] == "image" and app_img["album"] == "LINE (ในแอป)" and app_img["thumb"] and app_img["path"].endswith("1001.jpg")
+    assert photos[f"{LINE_APP}/files/storage/mo/1002"]["path"].endswith("1002.mp4")
+    assert photos[f"{LINE_APP}/files/storage/mo/1003"]["kind"] == "audio"
+    assert f"{LINE_APP}/cache/sticker/55" not in photos  # stickers are not evidence media
+    assert (ctx.extraction.dir / video["path"]).is_file()
+
+
+def test_line_app_folder_refused_is_logged(tmp_path):
+    dev = FakeDevice(files={"/sdcard/DCIM/Camera/IMG_1.jpg": (1000, 1762790400)}, deny_app_dir=True)
+    ctx, case, _ = make_ctx(tmp_path, ["photos"])
+    AndroidExtractor(dev).run(ctx)
+    assert len(case.records(ctx.extraction.id, "photos")) == 1
+    audit = " ".join(e["detail"] for e in case.audit_entries(ctx.extraction.id) if e["action"] == "line.media")
+    assert "Permission denied" in audit

@@ -211,6 +211,7 @@ export interface Photo {
   album: string;
   sha256: string;
   source_path: string;
+  kind?: "image" | "video" | "audio";
 }
 export interface App {
   package: string;

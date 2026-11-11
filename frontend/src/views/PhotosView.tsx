@@ -1,5 +1,5 @@
 import clsx from "clsx";
-import { Camera, ChevronLeft, ChevronRight, Clock, ExternalLink, FileImage, Folder, Hash, HardDrive, ImageOff, MapPin, Maximize2, X } from "lucide-react";
+import { Camera, ChevronLeft, ChevronRight, Clock, ExternalLink, FileImage, Film, Folder, Hash, HardDrive, ImageOff, MapPin, Maximize2, Music, Play, X } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { CopyButton } from "../components/DevicePanel";
@@ -63,6 +63,20 @@ export function MediaImage({ rel, alt, className, lazy }: { rel: string; alt: st
   );
 }
 
+/** Video or voice file in the photo grid: a tile with its kind, played in the viewer. */
+function MediaTile({ p }: { p: Photo }) {
+  const video = p.kind === "video";
+  return (
+    <span className={clsx("relative flex size-full flex-col items-center justify-center gap-1.5 p-2 text-center text-white", video ? "bg-gradient-to-br from-navy-700 to-navy-950" : "bg-gradient-to-br from-violet-600 to-violet-900")}>
+      {video ? <Film className="size-7 opacity-80" /> : <Music className="size-7 opacity-80" />}
+      <span className="line-clamp-2 text-[11px] break-all opacity-80">{p.name}</span>
+      <span className="absolute top-1.5 left-1.5 grid size-6 place-items-center rounded-full bg-white/20">
+        <Play className="size-3.5" />
+      </span>
+    </span>
+  );
+}
+
 function Meta({ icon, label, children }: { icon: ReactNode; label: string; children: ReactNode }) {
   return (
     <div className="flex gap-3 border-b border-line/70 py-2.5 last:border-0">
@@ -79,6 +93,7 @@ function Meta({ icon, label, children }: { icon: ReactNode; label: string; child
 
 function Lightbox({ photos, index, onClose, onMove }: { photos: Photo[]; index: number; onClose: () => void; onMove: (i: number) => void }) {
   const { t } = useI18n();
+  const media = useMediaUrl();
   const p = photos[index];
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -92,7 +107,16 @@ function Lightbox({ photos, index, onClose, onMove }: { photos: Photo[]; index: 
   return (
     <motion.div className="fixed inset-0 z-40 flex bg-navy-950/92 backdrop-blur-sm" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} data-testid="lightbox">
       <div className="relative flex min-w-0 flex-1 items-center justify-center p-10">
-        <MediaImage rel={NOT_DISPLAYABLE.test(p.path) && p.thumb ? p.thumb : p.path} alt={p.name} className="max-h-full max-w-full rounded-xl object-contain shadow-2xl" />
+        {p.kind === "video" ? (
+          <video key={p.path} src={media(p.path)} controls autoPlay className="max-h-full max-w-full rounded-xl shadow-2xl" data-testid="lightbox-video" />
+        ) : p.kind === "audio" ? (
+          <div className="flex flex-col items-center gap-4 rounded-2xl bg-white/10 px-10 py-8 text-white">
+            <Music className="size-12 opacity-80" />
+            <audio key={p.path} src={media(p.path)} controls autoPlay />
+          </div>
+        ) : (
+          <MediaImage rel={NOT_DISPLAYABLE.test(p.path) && p.thumb ? p.thumb : p.path} alt={p.name} className="max-h-full max-w-full rounded-xl object-contain shadow-2xl" />
+        )}
         <button onClick={() => onMove(Math.max(0, index - 1))} disabled={index === 0} className="absolute left-4 grid size-12 place-items-center rounded-full bg-white/10 text-white hover:bg-white/20 disabled:opacity-30">
           <ChevronLeft className="size-6" />
         </button>
@@ -210,7 +234,11 @@ function Photos({ rows }: { rows: Photo[] }) {
                   onClick={() => setOpen(i)}
                   className="group focus-ring relative aspect-square overflow-hidden rounded-xl bg-surface-3"
                 >
-                  <MediaImage rel={p.thumb || p.path} alt={p.name} lazy className="size-full object-cover transition duration-300 group-hover:scale-105" />
+                  {p.kind === "video" || p.kind === "audio" ? (
+                    <MediaTile p={p} />
+                  ) : (
+                    <MediaImage rel={p.thumb || p.path} alt={p.name} lazy className="size-full object-cover transition duration-300 group-hover:scale-105" />
+                  )}
                   <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent px-2 pt-6 pb-1.5 text-left text-[11px] text-white opacity-0 transition group-hover:opacity-100">
                     <span className="tabular block">{fmtDateTime(p.taken)}</span>
                   </span>

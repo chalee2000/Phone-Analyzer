@@ -95,13 +95,23 @@ def make_thumbnail(src: Path, dst: Path, size: int = 360) -> bool:
         return False
 
 
+def media_kind(ext: str) -> str:
+    """"image" / "video" / "audio" for a file extension, else ""."""
+    ext = ext.lower()
+    return "image" if ext in IMAGE_EXTS else "video" if ext in VIDEO_EXTS else "audio" if ext in AUDIO_EXTS else ""
+
+
 def sniff_ext(path: Path) -> str:
     """File extension from the first bytes, for app media stored without one."""
     try:
         with open(path, "rb") as fh:
-            head = fh.read(16)
+            return sniff_bytes(fh.read(16))
     except OSError:
         return ""
+
+
+def sniff_bytes(head: bytes) -> str:
+    """Extension for a file's first (≥ 12) bytes, or ""."""
     if head.startswith(b"\xff\xd8\xff"):
         return ".jpg"
     if head.startswith(b"\x89PNG"):

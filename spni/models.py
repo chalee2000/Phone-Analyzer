@@ -208,6 +208,7 @@ class Photo(Record):
     album: str = ""
     sha256: str = ""
     source_path: str = ""
+    kind: str = "image"  # image | video | audio (video / voice files shown with the pictures)
 
 
 @dataclass

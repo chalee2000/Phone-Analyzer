@@ -54,7 +54,8 @@ def test_demo_extraction_and_exports(cases_dir, device, expected):
         assert fh.read(5) == b"%PDF-"
 
     docx = api.export_report("word", {"lang": "en"})["data"]["path"]
-    assert len(Document(docx).inline_shapes) == state["counts"]["photos"]
+    pictures = [p for p in api.get_records("photos")["data"] if p.get("kind", "image") == "image"]
+    assert len(Document(docx).inline_shapes) == len(pictures)  # video / voice entries are labelled, not drawn
 
     audit = api.audit_log()["data"]
     assert any(a["action"] == "export.pdf" for a in audit)

@@ -111,9 +111,13 @@ def build_photos(*, case, extraction, records, ext_dir: Path, out_dir: Path, lan
         cell.width = Cm(8.5)
         first = cell.paragraphs[0]
         first.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        img = _scaled_jpeg(ext_dir / p["path"]) if p.get("path") else None
+        kind = p.get("kind") or "image"
+        img = _scaled_jpeg(ext_dir / p["path"]) if p.get("path") and kind == "image" else None
         if img:
             first.add_run().add_picture(img, width=Cm(7.8))
+        elif kind != "image":
+            label = {"video": ("[วิดีโอ]", "[video]"), "audio": ("[ไฟล์เสียง]", "[audio]")}.get(kind, ("[ไฟล์]", "[file]"))
+            _font(first.add_run(label[0] if th else label[1]), 12)
         else:
             _font(first.add_run("[ไม่สามารถแสดงภาพ]" if th else "[preview unavailable]"), 12)
         lines = [

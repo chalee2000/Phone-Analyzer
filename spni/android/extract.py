@@ -22,9 +22,9 @@ from pathlib import Path, PurePosixPath
 from typing import Any
 
 from ..extract import BaseExtractor, ExtractionContext
-from ..media import AUDIO_EXTS, IMAGE_EXTS
+from ..media import AUDIO_EXTS, IMAGE_EXTS, VIDEO_EXTS, media_kind, sniff_bytes
 from .. import line_export
-from ..models import App, CallRecord, ChatMessage, Contact, DeviceInfo, SimCard, SmsMessage, Unavailable, VoiceMemo, WifiNetwork
+from ..models import App, CallRecord, ChatMessage, Contact, DeviceInfo, Photo, SimCard, SmsMessage, Unavailable, VoiceMemo, WifiNetwork
 from ..util import normalize_phone, safe_name, unix_to_ms
 from . import agent as agent_mod
 from .adb import AuditedTransport, Transport
@@ -35,6 +35,11 @@ CALL_TYPES = {1: "incoming", 2: "outgoing", 3: "missed", 4: "voicemail", 5: "rej
 SMS_OUT_TYPES = {2, 4, 5, 6}
 
 PHOTO_DIRS = ["/sdcard/DCIM", "/sdcard/Pictures"]
+# Where LINE saves media the user kept (pictures there are already in PHOTO_DIRS).
+LINE_SHARED_DIRS = ["/sdcard/Pictures/LINE", "/sdcard/DCIM/LINE", "/sdcard/Movies/LINE", "/sdcard/Music/LINE", "/sdcard/Download/LINE"]
+# LINE's own folder in shared storage: received media, named by message id, no extension.
+LINE_APP_DIR = "/sdcard/Android/data/jp.naver.line.android"
+LINE_SKIP = ("sticker", "sticon", "emoji", "theme", "font", "splash", "/noti", "profile")
 VOICE_DIRS = [
     "/sdcard/MIUI/sound_recorder",
     "/sdcard/Recordings",
@@ -445,8 +450,81 @@ class AndroidExtractor(BaseExtractor):
                 continue
             album = PurePosixPath(remote).parent.name
             photos.append(ctx.photo_record(local, remote, album=album, modified=mtime * 1000 if mtime else None))
+        try:
+            photos += self.line_media(ctx, {p.source_path for p in photos}, limit)
+        except Exception as exc:  # LINE media is a bonus: never lose the photos above
+            ctx.audit("line.media.error", repr(exc))
         photos.sort(key=lambda p: p.taken or 0, reverse=True)
         return photos
+
+    def line_media(self, ctx: ExtractionContext, already: set[str], limit: int = 0) -> list[Photo]:
+        """Pictures, videos and voice clips of LINE that are readable without root.
+
+        * LINE's saved media in shared storage (Pictures/DCIM/Movies…/LINE)
+        * LINE's own folder ``Android/data/jp.naver.line.android`` when the
+          phone lets ADB read it (Android 11+ may refuse; that is logged).
+          Files there have no extension; the first 16 bytes give the type.
+        """
+        found: list[tuple[str, int, int, str]] = []  # remote, size, mtime, ext
+        exts = IMAGE_EXTS | VIDEO_EXTS | AUDIO_EXTS
+        for remote, size, mtime in find_files(self.t, LINE_SHARED_DIRS, exts):
+            if remote in already or not any(remote.startswith(d + "/") for d in LINE_SHARED_DIRS):
+                continue
+            found.append((remote, size, mtime, PurePosixPath(remote).suffix.lower()))
+        probe = self.t.shell(f"ls -d {LINE_APP_DIR} 2>&1", timeout=20).strip()
+        if not probe or "No such file" in probe or "denied" in probe.lower():
+            ctx.audit("line.media", f"{LINE_APP_DIR}: {probe[:160] or 'not present'}")
+        else:
+            cmd = (
+                f"find {LINE_APP_DIR} -type f -size +8k 2>/dev/null | head -n 6000 | while IFS= read -r f; do "
+                "printf '%s|%s|%s|' \"$(stat -c %s \"$f\")\" \"$(stat -c %Y \"$f\")\" \"$f\"; "
+                "od -An -tx1 -N16 \"$f\" | tr -d ' \\n'; echo; done"
+            )
+            for line in self.t.shell(cmd, timeout=600).splitlines():
+                parts = line.strip().split("|")
+                if len(parts) < 4 or not parts[0].isdigit():
+                    continue
+                size, mtime, remote, hexhead = int(parts[0]), int(parts[1]) if parts[1].isdigit() else 0, "|".join(parts[2:-1]), parts[-1]
+                if any(k in remote.lower() for k in LINE_SKIP):
+                    continue
+                ext = PurePosixPath(remote).suffix.lower()
+                if ext not in exts:
+                    try:
+                        ext = sniff_bytes(bytes.fromhex(hexhead))
+                    except ValueError:
+                        ext = ""
+                if ext in exts:
+                    found.append((remote, size, mtime, ext))
+        found.sort(key=lambda f: f[2], reverse=True)
+        if limit:
+            found = found[:limit]
+        out: list[Photo] = []
+        for i, (remote, size, mtime, ext) in enumerate(found):
+            ctx.check_cancel()
+            ctx.progress("photos", 0.9 + 0.1 * i / max(1, len(found)), count=len(already) + i)
+            in_app = remote.startswith(LINE_APP_DIR)
+            rel = PurePosixPath(remote.lstrip("/"))
+            name = rel.name if rel.suffix.lower() == ext else rel.name + ext
+            local = ctx.extraction.media_dir / ("line_app" if in_app else "line") / Path(*rel.parts[-3:-1]) / name
+            try:
+                self.t.pull(remote, local)
+            except Exception as exc:
+                ctx.audit("adb.pull.error", f"{remote}: {exc}")
+                continue
+            if mtime:
+                os.utime(local, (mtime, mtime))
+            album = "LINE (ในแอป)" if in_app else "LINE"
+            kind = media_kind(ext)
+            if kind == "image":
+                out.append(ctx.photo_record(local, remote, album=album, modified=mtime * 1000 if mtime else None))
+            else:
+                digest = ctx.register(local, remote)
+                out.append(Photo(
+                    name=name, path=ctx.extraction.rel(local), size=local.stat().st_size, taken=mtime * 1000 if mtime else None,
+                    modified=mtime * 1000 if mtime else None, album=album, sha256=digest, source_path=remote, kind=kind,
+                ))
+        ctx.audit("line.media", f"{len(out)} LINE media files ({sum(p.kind != 'image' for p in out)} video/audio)")
+        return out
 
     def voice(self, ctx: ExtractionContext) -> list[VoiceMemo]:
         files = find_files(self.t, VOICE_DIRS, AUDIO_EXTS)
