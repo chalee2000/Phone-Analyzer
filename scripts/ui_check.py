@@ -35,6 +35,14 @@ def wait_for_cdp(timeout: float) -> None:
     raise TimeoutError("WebView2 did not open its debugging port")
 
 
+def targets() -> list[dict]:
+    try:
+        with urllib.request.urlopen(f"http://127.0.0.1:{PORT}/json/list", timeout=5) as r:
+            return json.loads(r.read())
+    except (OSError, ValueError):
+        return []
+
+
 def main() -> int:
     exe, out = Path(sys.argv[1]), Path(sys.argv[2])
     out.mkdir(parents=True, exist_ok=True)
@@ -49,12 +57,17 @@ def main() -> int:
         with sync_playwright() as p:
             browser = p.chromium.connect_over_cdp(f"http://127.0.0.1:{PORT}")
             page = None
-            for _ in range(60):
-                pages = [pg for ctx in browser.contexts for pg in ctx.pages if pg.url.startswith("http://127.0.0.1")]
-                if pages:
-                    page = pages[0]
+            seen: list[str] = []
+            for _ in range(90):
+                pages = [pg for ctx in browser.contexts for pg in ctx.pages]
+                seen = [pg.url for pg in pages]
+                app = [pg for pg in pages if pg.url.startswith("http://127.0.0.1")]
+                if app:
+                    page = app[0]
                     break
                 time.sleep(1)
+            result["pages"] = seen
+            result["targets"] = [{"type": t.get("type"), "url": t.get("url"), "title": t.get("title")} for t in targets()]
             if page is None:
                 raise RuntimeError("the app window never loaded its page")
             errors: list[str] = []
@@ -92,6 +105,8 @@ def main() -> int:
         log = Path(os.environ.get("APPDATA", Path.home())) / "Phone Analysis" / "logs" / "app.log"
         if log.is_file():
             shutil.copy2(log, out / "app.log")
+            result["app_log_tail"] = log.read_text(encoding="utf-8", errors="replace").splitlines()[-30:]
+        result["exit_code"] = proc.poll()
         subprocess.run(["taskkill", "/F", "/T", "/PID", str(proc.pid)], capture_output=True)
         proc.wait(timeout=30)
     (out / "result.json").write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
