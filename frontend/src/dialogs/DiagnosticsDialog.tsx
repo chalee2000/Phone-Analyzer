@@ -6,6 +6,7 @@ import {
   CircleCheck,
   CircleDashed,
   CircleX,
+  Download,
   Laptop,
   Lock,
   Maximize2,
@@ -170,7 +171,7 @@ function StatusIcon({ status }: { status?: string }) {
   return <CircleDashed className="size-5 text-faint" />;
 }
 
-function Tip({ title, desc, status, dim, badge }: { title: ReactNode; desc?: ReactNode; status?: string; dim?: boolean; badge?: ReactNode }) {
+function Tip({ title, desc, status, dim, badge, action }: { title: ReactNode; desc?: ReactNode; status?: string; dim?: boolean; badge?: ReactNode; action?: ReactNode }) {
   return (
     <div className={clsx("flex gap-3 rounded-xl px-2 py-2.5", dim && "opacity-45")}>
       <span className="mt-0.5 shrink-0">
@@ -181,6 +182,7 @@ function Tip({ title, desc, status, dim, badge }: { title: ReactNode; desc?: Rea
           {title} {badge}
         </div>
         {desc && <div className="mt-0.5 text-[12.5px] leading-relaxed text-muted">{desc}</div>}
+        {action && <div className="mt-2">{action}</div>}
       </div>
     </div>
   );
@@ -188,7 +190,8 @@ function Tip({ title, desc, status, dim, badge }: { title: ReactNode; desc?: Rea
 
 export function DiagnosticsDialog() {
   const { t, lang } = useI18n();
-  const { dialogs, closeDialog, connect, setPlatform } = useStore();
+  const { dialogs, closeDialog, connect, setPlatform, errorText } = useStore();
+  const [fixing, setFixing] = useState<string | null>(null);
   const cfg = dialogs.diag;
   const open = !!cfg;
   const [platform, setDiagPlatform] = useState<Platform>("android");
@@ -294,7 +297,25 @@ export function DiagnosticsDialog() {
       setRestarting(false);
     }
   };
-  const status = (id: string) => checks?.find((c) => c.id === id)?.status;
+  const status = (id: string) => checks?.find((c) => c.id === id || c.id.startsWith(`${id}_`))?.status;
+  const runFix = async (fix: NonNullable<DiagnosticCheck["fix"]>) => {
+    setFixing(fix);
+    try {
+      if (fix === "start_apple_service") {
+        const r = await call<{ result: string }>("start_apple_service");
+        if (r.result === "ok") toast.success(t("diag.fixStarted"));
+        else toast.error(t(r.result === "denied" ? "diag.fixDenied" : "diag.fixFailed"));
+        await runChecks();
+      } else {
+        await call("install_apple_devices");
+        toast(t("diag.fixInstallHint"), { duration: 12000 });
+      }
+    } catch (e) {
+      toast.error(errorText(e));
+    } finally {
+      setFixing(null);
+    }
+  };
   const stepNames = ios ? [t("diag.iosStep1"), t("diag.iosStep2"), t("diag.iosStep3")] : [t("diag.step1"), t("diag.step2"), t("diag.step3")];
   const title = cfg?.notFound ? (ios ? t("diag.notFoundIos") : t("diag.notFoundAndroid")) : ios ? t("diag.titleIos") : t("diag.titleAndroid");
 
@@ -434,7 +455,26 @@ export function DiagnosticsDialog() {
               {checking && <Spinner className="size-4 text-muted" />}
             </div>
             {(checks ?? []).map((c) => (
-              <Tip key={c.id} title={t(`chk.${c.id}`)} desc={c.detail && <span className="font-mono text-[11.5px]">{c.detail}</span>} status={c.status} />
+              <Tip
+                key={c.id}
+                title={t(`chk.${c.id}`)}
+                desc={c.detail && <span className="font-mono text-[11.5px]">{c.detail}</span>}
+                status={c.status}
+                action={
+                  c.fix && (
+                    <Button
+                      size="sm"
+                      variant={c.fix === "start_apple_service" ? "gold" : "primary"}
+                      icon={c.fix === "start_apple_service" ? <Play className="size-3.5" /> : <Download className="size-3.5" />}
+                      loading={fixing === c.fix}
+                      onClick={() => void runFix(c.fix!)}
+                      data-testid={`diag-fix-${c.fix}`}
+                    >
+                      {t(c.fix === "start_apple_service" ? "diag.fixStart" : "diag.fixInstall")}
+                    </Button>
+                  )
+                }
+              />
             ))}
             {ios ? (
               <>

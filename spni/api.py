@@ -537,6 +537,40 @@ class Api:
     def restart_adb(self) -> bool:
         return self._adb.restart_server()
 
+    @endpoint
+    def start_apple_service(self) -> dict[str, Any]:
+        """Start Apple Mobile Device Service; Windows asks the examiner for administrator approval."""
+        import time
+
+        if sys.platform != "win32":
+            raise ApiError("windows_only")
+        import ctypes
+
+        _, name = diagnostics.query_apple_service()
+        rc = ctypes.windll.shell32.ShellExecuteW(None, "runas", "sc.exe", f'start "{name}"', None, 0)  # type: ignore[attr-defined]
+        if rc <= 32:  # 5: the examiner said no to the UAC prompt
+            logging.getLogger("spni.ios").warning("starting %s: ShellExecute returned %s", name, rc)
+            return {"result": "denied" if rc == 5 else "failed", "code": rc}
+        state = "unknown"
+        for _ in range(16):
+            time.sleep(0.5)
+            state, _ = diagnostics.query_apple_service()
+            if state == "running":
+                logging.getLogger("spni.ios").info("%s started", name)
+                return {"result": "ok"}
+        logging.getLogger("spni.ios").warning("%s did not start (state %s)", name, state)
+        return {"result": "failed", "state": state}
+
+    @endpoint
+    def install_apple_devices(self) -> None:
+        """Open Apple Devices (iPhone driver and service) in the Microsoft Store."""
+        if sys.platform == "win32":
+            os.startfile("ms-windows-store://pdp/?productid=9NP83LWLPZ9K")  # type: ignore[attr-defined]
+        else:
+            import webbrowser
+
+            webbrowser.open("https://apps.microsoft.com/detail/9np83lwlpz9k")
+
     # ── analysis: shared ─────────────────────────────────────────────────
     def _require_case(self) -> Case:
         if not self._case:
