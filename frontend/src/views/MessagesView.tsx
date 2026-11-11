@@ -1,6 +1,6 @@
 import { useVirtualizer } from "@tanstack/react-virtual";
 import clsx from "clsx";
-import { Lock, MessageCircle, MessageSquareText, Paperclip } from "lucide-react";
+import { Lock, MessageCircle, MessageSquareText, Paperclip, ScanLine } from "lucide-react";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { SearchBox } from "../components/DataTable";
 import { EmptySearch, KindView } from "../components/States";
@@ -295,7 +295,20 @@ export function SmsView() {
 /** Import buttons for chats the phone itself cannot give up (Messenger, LINE exports). */
 function ImportButtons({ compact }: { compact?: boolean }) {
   const { t } = useI18n();
-  const { openDialog } = useStore();
+  const { openDialog, state } = useStore();
+  const android = !!state.device && !state.device.offline && state.device.info.platform === "android";
+  const capture = android && (
+    <Button
+      variant={compact ? "soft" : "gold"}
+      size={compact ? "sm" : "md"}
+      icon={<ScanLine className="size-4" />}
+      onClick={() => openDialog("capture")}
+      className={compact ? "col-span-2 w-full" : undefined}
+      data-testid="chats-capture"
+    >
+      {t("cp.open")}
+    </Button>
+  );
   const items = [
     { id: "messenger", label: t("ms.open"), mark: (c: string, i: string) => <MessengerMark className={c} icon={i} />, open: () => openDialog("messenger") },
     {
@@ -323,10 +336,12 @@ function ImportButtons({ compact }: { compact?: boolean }) {
             <span className="truncate">{it.label}</span>
           </button>
         ))}
+        {capture}
       </div>
     );
   return (
     <div className="flex flex-wrap justify-center gap-2">
+      {capture}
       {items.map((it) => (
         <Button key={it.id} variant="outline" icon={it.mark("size-5 rounded-md shadow-none", "size-3")} onClick={it.open} data-testid={`chats-${it.id}`}>
           {it.label}

@@ -76,6 +76,7 @@ class Api:
         self._extraction_id: str | None = None
         self._job: dict[str, Any] | None = None
         self._reporting = False
+        self._capture: dict[str, Any] | None = None  # running chat screen capture
         self._report_paths: set[Path] = set()  # report outputs the examiner may open/reveal
 
     # ── wiring (not exposed: underscore names are hidden from JS) ───────────
@@ -763,6 +764,98 @@ class Api:
             (folder / name).write_bytes(data)
             out.append(str(folder / name))
         return out
+
+    # ── chat screen capture (Android, no root) ───────────────────────────
+    def _capture_transport(self) -> Any:
+        dev = self._device
+        if not dev or dev.get("offline") or dev["info"].get("platform") != "android":
+            raise ApiError("capture_needs_android")
+        if dev.get("demo"):
+            import random
+
+            from .android.capture_demo import DemoChatPhone
+            from .demo import SHARED_PEOPLE
+
+            rng = random.Random()
+            return DemoChatPhone(title=rng.choice(SHARED_PEOPLE)[1], seed=rng.randint(1, 10**6))
+        raw = getattr(self._extractor, "raw", None)
+        if raw is None:
+            raise ApiError("capture_needs_android")
+        return raw
+
+    @endpoint
+    def capture_start(self, options: dict[str, Any] | None = None) -> dict[str, Any]:
+        """Screen-capture the chat open on the phone; runs in the background (capture.* events)."""
+        from .android.adb import AuditedTransport
+        from .android.capture import Capture
+        from .extract import ExtractionContext
+
+        options = options or {}
+        with self._lock:
+            if self._job or self._reporting or self._capture:
+                raise ApiError("busy")
+            transport = self._capture_transport()
+            case = self._ensure_case()
+            info = dict(self._device["info"])  # type: ignore[index]
+            demo = bool(self._device.get("demo"))  # type: ignore[union-attr]
+            ext = None
+            for e in case.list_extractions():  # one capture source per phone in the case
+                if e["method"] == "screen-capture" and e["serial"] == info.get("serial"):
+                    ext = case.get_extraction(e["id"])
+                    break
+            if ext is None:
+                label = info.get("market_name") or info.get("model") or "Android"
+                ext = case.create_extraction({**info, "market_name": f"{label} · บันทึกหน้าจอ"}, "screen-capture", options.get("examiner", ""))
+                for kind in ALL_KINDS:
+                    if kind not in ("chats", "photos"):
+                        ext.set_unavailable(kind, "not_supported", "chat screen capture")
+            ctx = ExtractionContext(ext, self._bus, f"capture-{uuid.uuid4().hex[:8]}", ["chats", "photos"], options)
+            ids = {"case_id": case.id, "extraction_id": ext.id}
+            cap = Capture(
+                AuditedTransport(transport, ctx.audit), ctx,
+                max_pages=int(options.get("max_pages") or 200), title=str(options.get("title") or ""),
+                progress=lambda info_: self._bus.emit("capture.progress", {**info_, **ids}),
+                settle=0.15 if demo else 0.8,
+            )
+            self._capture = {"cap": cap, **ids}
+        ctx.audit("capture.start", f"max_pages={cap.max_pages} title={cap.title_override!r} (examiner opened the chat on the phone)")
+        threading.Thread(target=self._run_capture, args=(cap, ctx, case, ext, ids), daemon=True, name="capture").start()
+        self._bus.emit("capture.started", ids)
+        return ids
+
+    def _run_capture(self, cap: Any, ctx: Any, case: Case, ext: Any, ids: dict[str, str]) -> None:
+        try:
+            res = cap.run()
+            chats = ext.records("chats") + [m.to_dict() for m in res.messages]
+            chats.sort(key=lambda c: c.get("timestamp") or 0, reverse=True)
+            photos = ext.records("photos") + [p.to_dict() for p in res.shots + res.pictures]
+            ext.set_records("chats", chats)
+            ext.set_records("photos", photos)
+            ext.audit("capture.done", f"{res.app} '{res.title}': pages={res.pages} text_pages={res.text_pages} "
+                      f"messages={len(res.messages)} pictures={len(res.pictures)} reached_top={res.reached_top} stopped={res.stopped}")
+            ext.finish("completed")
+            done = {**ids, "pages": res.pages, "messages": len(res.messages), "pictures": len(res.pictures),
+                    "title": res.title, "app": res.app, "reached_top": res.reached_top, "stopped": res.stopped, "text_pages": res.text_pages}
+        except Exception as exc:
+            logging.getLogger("spni.capture").exception("capture failed")
+            ctx.audit("capture.error", repr(exc))
+            done = {**ids, "error": f"{type(exc).__name__}: {exc}"}
+        finally:
+            self._capture = None
+        self._bus.emit("capture.done", done)
+        self._bus.emit("case.opened", case.meta())
+
+    @endpoint
+    def capture_stop(self) -> bool:
+        cap = self._capture
+        if cap:
+            cap["cap"].stop()
+        return bool(cap)
+
+    @endpoint
+    def capture_state(self) -> dict[str, Any] | None:
+        cap = self._capture
+        return {k: v for k, v in cap.items() if k != "cap"} if cap else None
 
     # ── LINE "Export chat history" text files ──────────────────────────
     @endpoint

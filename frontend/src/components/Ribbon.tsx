@@ -16,6 +16,7 @@ import {
   Link2,
   MessageCircle,
   Network,
+  ScanLine,
   PhoneCall,
   ScrollText,
   Search,
@@ -215,6 +216,7 @@ function MoreMenu({ size }: { size: Size }) {
           {item(<FolderOpen className="size-4.5" />, t("more.folder"), () => state.case && void call("open_case_folder"))}
           {item(<MessageCircle className="size-4.5" />, t("ms.open"), () => openDialog("messenger"))}
           {item(<MessageCircle className="size-4.5 text-[#06c755]" />, t("ln.open"), () => openDialog("messenger", "line"))}
+          {state.device && !state.device.offline && state.device.info.platform === "android" && item(<ScanLine className="size-4.5" />, t("cp.open"), () => openDialog("capture"))}
           <div className="my-1 h-px bg-line" />
           {item(
             <Sparkles className="size-4.5" />,

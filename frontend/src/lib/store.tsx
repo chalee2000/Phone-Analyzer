@@ -26,7 +26,7 @@ export interface Job {
   message?: string;
 }
 
-export type DialogName = "diag" | "extract" | "cases" | "history" | "number" | "picker" | "audit" | "about" | "report" | "messenger";
+export type DialogName = "diag" | "extract" | "cases" | "history" | "number" | "picker" | "audit" | "about" | "report" | "messenger" | "capture";
 
 export interface Dialogs {
   diag: { platform: Platform; notFound: boolean } | null;
@@ -41,10 +41,11 @@ export interface Dialogs {
   report: { formats?: string[] } | null;
   /** Chat import dialog: true / "messenger" opens on Messenger, "line" on LINE exports. */
   messenger: boolean | "messenger" | "line";
+  capture: boolean;
 }
 
 const EMPTY_STATE: AppState = { device: null, case: null, extraction: null, counts: {}, running: false };
-const NO_DIALOGS: Dialogs = { diag: null, extract: false, cases: false, history: false, number: false, picker: null, audit: false, about: false, report: null, messenger: false };
+const NO_DIALOGS: Dialogs = { diag: null, extract: false, cases: false, history: false, number: false, picker: null, audit: false, about: false, report: null, messenger: false, capture: false };
 
 function readPref<T extends string>(key: string, fallback: T): T {
   try {
