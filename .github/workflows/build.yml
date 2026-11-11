@@ -102,7 +102,7 @@ jobs:
         continue-on-error: true
         timeout-minutes: 12
         run: |
-          pip install "playwright>=1.45"
+          pip install "websocket-client>=1.6"
           python scripts/ui_check.py "dist/Phone Analysis/Phone Analysis.exe" ui-check
       - uses: actions/upload-artifact@v4
         if: always()

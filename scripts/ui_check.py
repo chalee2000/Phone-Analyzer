@@ -2,15 +2,17 @@
 
     python scripts/ui_check.py "dist/Phone Analysis/Phone Analysis.exe" ui-check
 
-Starts the .exe in demo mode with WebView2's remote debugging port, connects
-Playwright over CDP (no browser download needed), runs a demo Android
-extraction through the app's own API, opens the Photos tab and checks that the
-pictures really render. Writes a screenshot, the result and the app log to the
-output folder; exits non-zero when pictures do not load.
+Starts the .exe in demo mode with WebView2's remote debugging port and talks
+to the app's page target over the DevTools protocol (a plain websocket; tools
+such as Playwright do not list WebView2 pages). Runs a demo Android extraction
+through the app's own API, opens the Photos tab and checks that the pictures
+really render. Writes a screenshot, the result and the app log to the output
+folder; exits non-zero when pictures do not load.
 """
 
 from __future__ import annotations
 
+import base64
 import json
 import os
 import shutil
@@ -24,23 +26,52 @@ from pathlib import Path
 PORT = 9333
 
 
-def wait_for_cdp(timeout: float) -> None:
-    end = time.time() + timeout
-    while time.time() < end:
-        try:
-            with urllib.request.urlopen(f"http://127.0.0.1:{PORT}/json/version", timeout=2):
-                return
-        except OSError:
-            time.sleep(1)
-    raise TimeoutError("WebView2 did not open its debugging port")
-
-
 def targets() -> list[dict]:
     try:
         with urllib.request.urlopen(f"http://127.0.0.1:{PORT}/json/list", timeout=5) as r:
             return json.loads(r.read())
     except (OSError, ValueError):
         return []
+
+
+class Page:
+    """Minimal DevTools client for one page target."""
+
+    def __init__(self, ws_url: str) -> None:
+        import websocket  # websocket-client
+
+        self.ws = websocket.create_connection(ws_url, timeout=180, suppress_origin=True)
+        self.seq = 0
+
+    def call(self, method: str, **params) -> dict:
+        self.seq += 1
+        self.ws.send(json.dumps({"id": self.seq, "method": method, "params": params}))
+        while True:
+            msg = json.loads(self.ws.recv())
+            if msg.get("id") == self.seq:
+                if "error" in msg:
+                    raise RuntimeError(f"{method}: {msg['error']}")
+                return msg.get("result", {})
+
+    def eval(self, expr: str):
+        r = self.call("Runtime.evaluate", expression=expr, awaitPromise=True, returnByValue=True)
+        if r.get("exceptionDetails"):
+            raise RuntimeError(f"JS error: {r['exceptionDetails'].get('text')} {r['exceptionDetails'].get('exception', {}).get('description', '')}")
+        return r.get("result", {}).get("value")
+
+    def wait(self, expr: str, timeout: float) -> None:
+        end = time.time() + timeout
+        while time.time() < end:
+            try:
+                if self.eval(expr):
+                    return
+            except RuntimeError:
+                pass
+            time.sleep(1)
+        raise TimeoutError(f"timed out waiting for {expr}")
+
+
+READY = "!!(window.pywebview && window.pywebview.api && window.pywebview.api.connect)"
 
 
 def main() -> int:
@@ -51,54 +82,47 @@ def main() -> int:
     proc = subprocess.Popen([str(exe), "--demo", "--cases", str(cases)], env=env)
     result: dict = {"ok": False}
     try:
-        wait_for_cdp(120)
-        from playwright.sync_api import sync_playwright
-
-        with sync_playwright() as p:
-            browser = p.chromium.connect_over_cdp(f"http://127.0.0.1:{PORT}")
-            page = None
-            seen: list[str] = []
-            for _ in range(90):
-                pages = [pg for ctx in browser.contexts for pg in ctx.pages]
-                seen = [pg.url for pg in pages]
-                app = [pg for pg in pages if pg.url.startswith("http://127.0.0.1")]
-                if app:
-                    page = app[0]
-                    break
-                time.sleep(1)
-            result["pages"] = seen
-            result["targets"] = [{"type": t.get("type"), "url": t.get("url"), "title": t.get("title")} for t in targets()]
-            if page is None:
-                raise RuntimeError("the app window never loaded its page")
-            errors: list[str] = []
-            page.on("console", lambda m: m.type == "error" and errors.append(m.text))
-            page.on("pageerror", lambda e: errors.append(str(e)))
-            ready = "() => !!(window.pywebview && window.pywebview.api && window.pywebview.api.connect)"
-            page.wait_for_function(ready, timeout=90_000)
-            page.evaluate("async () => { await window.pywebview.api.connect('demo:android');"
-                          " return await window.pywebview.api.start_extraction({kinds: ['photos', 'contacts']}); }")
-            for _ in range(240):
-                if not page.evaluate("async () => (await window.pywebview.api.state()).data.running"):
-                    break
-                time.sleep(1)
-            page.reload()
-            page.wait_for_function(ready, timeout=90_000)
-            page.wait_for_timeout(2500)
-            page.click("[data-testid=tab-photos]")
-            page.wait_for_timeout(5000)
-            grid = page.evaluate("""() => {
-                const imgs = [...document.querySelectorAll('[data-testid=photo-grid] img')];
-                return {total: imgs.length, loaded: imgs.filter(i => i.complete && i.naturalWidth > 0).length,
-                        broken: document.querySelectorAll('[data-testid=photo-broken]').length, src: imgs[0] ? imgs[0].src : ''};
-            }""")
-            if grid["src"]:
-                grid["fetch"] = page.evaluate(
-                    "async (u) => { try { const r = await fetch(u); return [r.status, r.headers.get('content-type')]; }"
-                    " catch (e) { return ['error', String(e)]; } }", grid["src"])
-            grid["page_url"] = page.url
-            grid["media_base"] = page.evaluate("async () => (await window.pywebview.api.app_info()).data.media_base")
-            page.screenshot(path=str(out / "photos.png"))
-            result = {"ok": grid["total"] > 0 and grid["broken"] == 0 and grid["loaded"] > 0, **grid, "errors": errors}
+        target = None
+        for _ in range(150):
+            found = [t for t in targets() if t.get("type") == "page" and str(t.get("url", "")).startswith("http://127.0.0.1")]
+            if found:
+                target = found[0]
+                break
+            time.sleep(1)
+        result["targets"] = [{"type": t.get("type"), "url": t.get("url"), "title": t.get("title")} for t in targets()]
+        if target is None:
+            raise RuntimeError("the app window never loaded its page")
+        page = Page(target["webSocketDebuggerUrl"])
+        page.call("Runtime.enable")
+        page.wait(READY, 90)
+        page.eval("(async () => { await window.pywebview.api.connect('demo:android');"
+                  " return await window.pywebview.api.start_extraction({kinds: ['photos', 'contacts']}); })()")
+        for _ in range(240):
+            if not page.eval("(async () => (await window.pywebview.api.state()).data.running)()"):
+                break
+            time.sleep(1)
+        page.call("Page.reload")
+        time.sleep(3)
+        page.wait(READY, 90)
+        time.sleep(2)
+        page.wait("!!document.querySelector('[data-testid=tab-photos]')", 30)
+        page.eval("document.querySelector('[data-testid=tab-photos]').click()")
+        time.sleep(6)
+        grid = page.eval("""(() => {
+            const imgs = [...document.querySelectorAll('[data-testid=photo-grid] img')];
+            return {total: imgs.length, loaded: imgs.filter(i => i.complete && i.naturalWidth > 0).length,
+                    broken: document.querySelectorAll('[data-testid=photo-broken]').length, src: imgs[0] ? imgs[0].src : ''};
+        })()""")
+        if grid["src"]:
+            grid["fetch"] = page.eval(
+                "(async () => { try { const r = await fetch(%s); return [r.status, r.headers.get('content-type')]; }"
+                " catch (e) { return ['error', String(e)]; } })()" % json.dumps(grid["src"]))
+        grid["page_url"] = target["url"]
+        grid["media_base"] = page.eval("(async () => (await window.pywebview.api.app_info()).data.media_base)()")
+        shot = page.call("Page.captureScreenshot", format="png")
+        (out / "photos.png").write_bytes(base64.b64decode(shot["data"]))
+        result.update(grid)
+        result["ok"] = grid["total"] > 0 and grid["broken"] == 0 and grid["loaded"] > 0
     except Exception as exc:  # report, then fail the step
         result["exception"] = f"{type(exc).__name__}: {exc}"
     finally:
@@ -108,7 +132,10 @@ def main() -> int:
             result["app_log_tail"] = log.read_text(encoding="utf-8", errors="replace").splitlines()[-30:]
         result["exit_code"] = proc.poll()
         subprocess.run(["taskkill", "/F", "/T", "/PID", str(proc.pid)], capture_output=True)
-        proc.wait(timeout=30)
+        try:
+            proc.wait(timeout=30)
+        except subprocess.TimeoutExpired:
+            pass
     (out / "result.json").write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
     print(json.dumps(result, ensure_ascii=False, indent=2))
     return 0 if result.get("ok") else 1
