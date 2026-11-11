@@ -39,7 +39,8 @@ export interface Dialogs {
   about: boolean;
   /** Report wizard; `formats` preselects outputs (e.g. the ribbon PDF button). */
   report: { formats?: string[] } | null;
-  messenger: boolean;
+  /** Chat import dialog: true / "messenger" opens on Messenger, "line" on LINE exports. */
+  messenger: boolean | "messenger" | "line";
 }
 
 const EMPTY_STATE: AppState = { device: null, case: null, extraction: null, counts: {}, running: false };

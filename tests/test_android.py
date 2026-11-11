@@ -74,9 +74,10 @@ DENIED = "Error while accessing provider:sms\njava.lang.SecurityException: Permi
 class FakeDevice:
     serial = "9b01005930533036340014e659ae3c"
 
-    def __init__(self, deny_sms: bool = False, files: dict | None = None):
+    def __init__(self, deny_sms: bool = False, files: dict | None = None, contents: dict | None = None):
         self.deny_sms = deny_sms
         self.files = files or {}
+        self.contents = contents or {}  # remote path -> bytes (anything else pulls as a JPEG)
         self.commands: list[str] = []
 
     def shell(self, cmd: str, timeout: float = 120) -> str:
@@ -101,12 +102,18 @@ class FakeDevice:
             return WIFI
         if cmd == "dumpsys package packages":
             return PACKAGES
+        if cmd.startswith("head -c "):
+            path = cmd.split(" ", 3)[3].strip("'")
+            return self.contents.get(path, b"")[:64].decode("utf-8", "replace")
         if cmd.startswith("find "):
             return "\n".join(f"{size}|{mtime}|{path}" for path, (size, mtime) in self.files.items())
         return ""
 
     def pull(self, remote: str, local: Path) -> None:
         local.parent.mkdir(parents=True, exist_ok=True)
+        if remote in self.contents:
+            local.write_bytes(self.contents[remote])
+            return
         from PIL import Image
 
         Image.new("RGB", (64, 48), (200, 100, 50)).save(local, "JPEG")
@@ -170,7 +177,7 @@ def test_full_extraction_with_providers(tmp_path):
     assert photos[0]["sha256"] and photos[0]["thumb"].startswith("thumbs/")
     assert case.files(ext.id)[0]["source"] == "/sdcard/DCIM/Camera/IMG_1.jpg"
     info = case.extraction_info(ext.id)
-    assert info["unavailable"]["chats"]["reason"] == "requires_root"
+    assert info["unavailable"]["chats"]["reason"] == "line_export_needed"  # no LINE export on this phone
     audit = [a["detail"] for a in case.audit_entries(ext.id)]
     assert any(d.startswith("getprop") for d in audit), "every ADB command must be audited"
 

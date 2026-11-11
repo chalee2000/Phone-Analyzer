@@ -39,6 +39,7 @@ class Unavailable(str, Enum):
     NOT_SUPPORTED = "not_supported"
     AGENT_DECLINED = "agent_declined"
     AGENT_MISSING = "agent_missing"
+    LINE_EXPORT_NEEDED = "line_export_needed"  # Android chats: no LINE export file on the phone
     SKIPPED = "skipped"
     ERROR = "error"
 

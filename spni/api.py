@@ -482,7 +482,10 @@ class Api:
         import webview
 
         kind = getattr(getattr(webview, "FileDialog", None), "OPEN", None) or webview.OPEN_DIALOG
-        types = ("Facebook / Messenger export (*.zip;*.json)", "All files (*.*)")
+        types = (
+            ("LINE chat export (*.txt;*.zip)", "All files (*.*)") if purpose == "line"
+            else ("Facebook / Messenger export (*.zip;*.json)", "All files (*.*)")
+        )
         res = self._window.create_file_dialog(kind, allow_multiple=True, file_types=types)
         if not res:
             return None
@@ -722,16 +725,18 @@ class Api:
 
         return messenger.preview(self._input_paths(paths))
 
-    def _import_messenger(self, paths: list[str], owner: str) -> dict[str, Any]:
+    def _import_messenger(self, paths: list[str], owner: str, module: Any = None) -> dict[str, Any]:
+        """Import an account export as its own source (Messenger, or LINE chat exports)."""
         from . import messenger
 
+        module = module or messenger
         with self._lock:
             if self._job or self._reporting:
                 raise ApiError("busy")
             case = self._ensure_case()
             self._reporting = True
         try:
-            result = messenger.import_into(
+            result = module.import_into(
                 case, paths, owner,
                 progress=lambda step, frac: self._bus.emit("import.progress", {"step": step, "progress": round(frac, 3)}),
             )
@@ -755,6 +760,30 @@ class Api:
         folder = self._uploads()
         out = []
         for name, data in messenger.demo_export():
+            (folder / name).write_bytes(data)
+            out.append(str(folder / name))
+        return out
+
+    # ── LINE "Export chat history" text files ──────────────────────────
+    @endpoint
+    def line_preview(self, paths: list[str]) -> dict[str, Any]:
+        from . import line_export
+
+        return line_export.preview(self._input_paths(paths))
+
+    @endpoint
+    def line_import(self, paths: list[str], owner: str = "") -> dict[str, Any]:
+        from . import line_export
+
+        return self._import_messenger(self._input_paths(paths), owner, line_export)
+
+    @endpoint
+    def line_demo_files(self) -> list[str]:
+        from . import line_export
+
+        folder = self._uploads()
+        out = []
+        for name, data in line_export.demo_files():
             (folder / name).write_bytes(data)
             out.append(str(folder / name))
         return out

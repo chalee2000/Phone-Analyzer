@@ -126,6 +126,9 @@ export function ConnectView() {
           <button onClick={() => openDialog("messenger")} className="flex items-center gap-1.5 text-[13.5px] font-semibold text-muted hover:text-ink" data-testid="connect-messenger">
             <MessageCircle className="size-4" /> {t("ms.open")}
           </button>
+          <button onClick={() => openDialog("messenger", "line")} className="flex items-center gap-1.5 text-[13.5px] font-semibold text-muted hover:text-ink" data-testid="connect-line">
+            <MessageCircle className="size-4 text-[#06c755]" /> {t("ln.open")}
+          </button>
         </div>
 
         <p className="mt-6 max-w-xl text-[14px] text-muted">{platform === "ios" ? t("connect.iosHint") : t("connect.androidHint")}</p>

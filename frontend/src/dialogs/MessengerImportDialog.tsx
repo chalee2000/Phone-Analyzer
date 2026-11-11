@@ -36,6 +36,7 @@ interface Preview {
   last: number | null;
   sources: { name: string; size: number | null; path: string }[];
   warnings: string[];
+  skipped?: string[];
 }
 
 interface Result {
@@ -68,6 +69,17 @@ function Stat({ icon, label, value }: { icon: ReactNode; label: string; value: R
   );
 }
 
+/** LINE's green mark for the LINE-export source. */
+function LineMark({ className = "size-11", icon = "size-5" }: { className?: string; icon?: string }) {
+  return (
+    <span className={clsx("grid shrink-0 place-items-center rounded-2xl bg-[#06c755] text-white shadow-[0_8px_20px_-8px_rgba(6,199,85,0.7)]", className)}>
+      <MessageCircle className={icon} strokeWidth={2.4} />
+    </span>
+  );
+}
+
+type Source = "messenger" | "line";
+
 export function MessengerImportDialog() {
   const { t } = useI18n();
   const { dialogs, closeDialog, errorText, refresh, resetRecords, setTab } = useStore();
@@ -80,9 +92,13 @@ export function MessengerImportDialog() {
   const [progress, setProgress] = useState({ step: "read", progress: 0 });
   const [result, setResult] = useState<Result | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const [source, setSource] = useState<Source>("messenger");
+  const line = source === "line";
+  const rpc = (name: string) => `${source}_${name}`;
 
   useEffect(() => {
     if (!open) return;
+    setSource(open === "line" ? "line" : "messenger");
     setPhase("pick");
     setPaths([]);
     setPv(null);
@@ -95,7 +111,7 @@ export function MessengerImportDialog() {
     if (!list.length) return;
     setLoading(true);
     try {
-      const p = await call<Preview>("messenger_preview", list);
+      const p = await call<Preview>(rpc("preview"), list);
       setPaths(list);
       setPv(p);
       setOwner(p.owner);
@@ -113,7 +129,7 @@ export function MessengerImportDialog() {
       return;
     }
     try {
-      const list = await call<string[] | null>("choose_files", "messenger");
+      const list = await call<string[] | null>("choose_files", source);
       if (list?.length) await load(list);
     } catch (e) {
       toast.error(errorText(e));
@@ -136,7 +152,7 @@ export function MessengerImportDialog() {
   const demo = async () => {
     setLoading(true);
     try {
-      await load(await call<string[]>("messenger_demo_files"));
+      await load(await call<string[]>(rpc("demo_files")));
     } catch (e) {
       toast.error(errorText(e));
       setLoading(false);
@@ -150,11 +166,11 @@ export function MessengerImportDialog() {
       if (name === "import.progress") setProgress(payload as { step: string; progress: number });
     });
     try {
-      const res = await call<Result>("messenger_import", paths, owner);
+      const res = await call<Result>(rpc("import"), paths, owner);
       setResult(res);
       setPhase("done");
       await refresh();
-      toast.success(t("ms.done"));
+      toast.success(t(line ? "ln.done" : "ms.done"));
     } catch (e) {
       toast.error(errorText(e));
       setPhase("preview");
@@ -177,12 +193,12 @@ export function MessengerImportDialog() {
   };
 
   return (
-    <Modal open={open} onClose={close} width={860} dismissable={phase !== "working"}>
+    <Modal open={!!open} onClose={close} width={860} dismissable={phase !== "working"}>
       <div className="relative flex items-start gap-4 border-b border-line px-6 pt-5 pb-4">
-        <MessengerMark />
+        {line ? <LineMark /> : <MessengerMark />}
         <div className="min-w-0 flex-1">
-          <h2 className="font-display text-[21px] leading-tight font-semibold text-ink">{t("ms.title")}</h2>
-          <p className="mt-1 text-[13.5px] text-muted">{t("ms.sub")}</p>
+          <h2 className="font-display text-[21px] leading-tight font-semibold text-ink">{t(line ? "ln.title" : "ms.title")}</h2>
+          <p className="mt-1 text-[13.5px] text-muted">{t(line ? "ln.sub" : "ms.sub")}</p>
         </div>
         {phase !== "working" && (
           <button onClick={close} className="focus-ring -mt-1 -mr-2 grid size-9 place-items-center rounded-xl text-muted hover:bg-surface-3 hover:text-ink" aria-label="close">
@@ -195,6 +211,23 @@ export function MessengerImportDialog() {
       <div className="max-h-[calc(100vh-220px)] min-h-[360px] overflow-auto px-6 py-5">
         {phase === "pick" && (
           <div className="flex flex-col gap-4" data-testid="ms-pick">
+            <div className="inline-flex w-fit gap-1 rounded-xl bg-surface-3 p-1">
+              {(["messenger", "line"] as const).map((src) => (
+                <button
+                  key={src}
+                  type="button"
+                  data-testid={`import-source-${src}`}
+                  onClick={() => setSource(src)}
+                  className={clsx(
+                    "focus-ring flex h-9 items-center gap-2 rounded-lg px-3.5 text-[13.5px] font-semibold transition",
+                    source === src ? "bg-surface text-ink shadow-sm ring-1 ring-line" : "text-muted hover:text-ink",
+                  )}
+                >
+                  {src === "line" ? <LineMark className="size-5 rounded-md shadow-none" icon="size-3" /> : <MessengerMark className="size-5 rounded-md shadow-none" icon="size-3" />}
+                  {src === "line" ? "LINE (.txt)" : "Messenger"}
+                </button>
+              ))}
+            </div>
             <button
               type="button"
               onClick={() => void pick()}
@@ -206,9 +239,28 @@ export function MessengerImportDialog() {
                 {loading ? <Spinner className="size-6" /> : <FileArchive className="size-7" />}
               </span>
               <span className="font-display text-[17px] font-semibold text-ink">{t("ms.choose")}</span>
-              <span className="text-[13px] text-muted">{t("ms.chooseHint")}</span>
+              <span className="text-[13px] text-muted">{t(line ? "ln.chooseHint" : "ms.chooseHint")}</span>
             </button>
-            <input ref={fileRef} type="file" accept=".zip,.json" multiple hidden onChange={(e) => void upload(e.target.files)} />
+            <input ref={fileRef} type="file" accept={line ? ".txt,.zip" : ".zip,.json"} multiple hidden onChange={(e) => void upload(e.target.files)} />
+            {line ? (
+              <>
+                <div className="grid grid-cols-2 gap-3">
+                  {(["Android", "Ios"] as const).map((os) => (
+                    <div key={os} className="rounded-2xl border border-line bg-surface p-4">
+                      <div className="mb-1.5 flex items-center gap-2 text-[13.5px] font-bold text-ink">
+                        <MessagesSquare className="size-4 text-[#06c755]" />
+                        {t(`ln.how${os}`)}
+                      </div>
+                      <p className="text-[12.5px] leading-relaxed text-muted">{t(`ln.how${os}Body`)}</p>
+                    </div>
+                  ))}
+                </div>
+                <div className="flex items-start gap-3 rounded-2xl border border-sky-200 bg-sky-50/70 px-4 py-3 text-[12.5px] text-sky-800 dark:border-sky-500/30 dark:bg-sky-500/10 dark:text-sky-200">
+                  <ImageIcon className="mt-0.5 size-4 shrink-0" />
+                  {t("ln.note")}
+                </div>
+              </>
+            ) : (
             <div className="grid grid-cols-2 gap-3">
               <div className="rounded-2xl border border-line bg-surface p-4">
                 <div className="mb-1.5 flex items-center gap-2 text-[13.5px] font-bold text-ink">
@@ -225,9 +277,10 @@ export function MessengerImportDialog() {
                 <p className="text-[12.5px] leading-relaxed text-muted">{t("ms.howE2eeBody")}</p>
               </div>
             </div>
+            )}
             <div className="flex items-start gap-3 rounded-2xl border border-gold-200 bg-gold-50/70 px-4 py-3 text-[12.5px] text-gold-800 dark:border-gold-500/30 dark:bg-gold-500/10 dark:text-gold-200">
               <Info className="mt-0.5 size-4 shrink-0" />
-              {t("ms.legal")}
+              {t(line ? "ln.legal" : "ms.legal")}
             </div>
           </div>
         )}
@@ -247,6 +300,16 @@ export function MessengerImportDialog() {
                 </Badge>
               )}
               {pv.requests > 0 && <Badge tone="amber">{t("ms.requests", { n: pv.requests })}</Badge>}
+              {!!pv.skipped?.length && (
+                <Badge tone="amber">
+                  <AlertTriangle className="size-3" /> {t("ln.skipped", { n: pv.skipped.length })}
+                </Badge>
+              )}
+              {pv.warnings.includes("no_owner") && (
+                <Badge tone="amber">
+                  <AlertTriangle className="size-3" /> {t("ln.noOwner")}
+                </Badge>
+              )}
               {pv.warnings.includes("html_skipped") && (
                 <Badge tone="red">
                   <AlertTriangle className="size-3" /> {t("ms.htmlSkipped")}
@@ -319,7 +382,7 @@ export function MessengerImportDialog() {
             <span className="grid size-16 place-items-center rounded-2xl bg-gradient-to-br from-emerald-400 to-emerald-600 text-white shadow-lg">
               <CircleCheckBig className="size-8" />
             </span>
-            <div className="font-display text-[22px] font-semibold text-ink">{t("ms.done")}</div>
+            <div className="font-display text-[22px] font-semibold text-ink">{t(line ? "ln.done" : "ms.done")}</div>
             <div className="text-[14px] text-muted">{t("ms.doneSub", { owner: result.owner, threads: result.threads, chats: (result.counts.chats ?? 0).toLocaleString(), photos: (result.counts.photos ?? 0).toLocaleString() })}</div>
             {result.missing_media > 0 && (
               <div className="flex items-center gap-2 rounded-xl bg-amber-50 px-3 py-2 text-[12.5px] text-amber-700 dark:bg-amber-500/10 dark:text-amber-300">
@@ -363,9 +426,11 @@ export function MessengerImportDialog() {
             <Button variant="ghost" onClick={close}>
               {t("rw.close")}
             </Button>
-            <Button variant="outline" icon={<ImageIcon className="size-4" />} onClick={() => void show("photos")}>
-              {t("ms.viewPhotos")}
-            </Button>
+            {!line && (
+              <Button variant="outline" icon={<ImageIcon className="size-4" />} onClick={() => void show("photos")}>
+                {t("ms.viewPhotos")}
+              </Button>
+            )}
             <Button variant="primary" icon={<MessagesSquare className="size-4" />} onClick={() => void show("chats")} data-testid="ms-view">
               {t("ms.viewChats")}
             </Button>

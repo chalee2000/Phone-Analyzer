@@ -7,7 +7,7 @@ import { useI18n } from "../lib/i18n";
 import { useStore } from "../lib/store";
 import { ALL_KINDS, type Kind } from "../lib/types";
 
-const ANDROID_ROOT_ONLY: Kind[] = ["chats", "web"];
+const ANDROID_ROOT_ONLY: Kind[] = ["web"];
 const ANDROID_NONE: Kind[] = ["notes"];
 
 function readPref(key: string, fallback = "") {
@@ -85,6 +85,7 @@ export function ExtractDialog() {
                 <span className="min-w-0">
                   <span className="block truncate text-[13.5px] font-semibold text-ink">{t(`tab.${k}`)}</span>
                   {off && <span className="block text-[11px] text-muted">{ANDROID_NONE.includes(k) ? t("ex.notAndroid") : t("ex.rootOnly")}</span>}
+                  {!off && !ios && k === "chats" && <span className="block truncate text-[11px] text-muted">{t("ex.lineExport")}</span>}
                 </span>
                 {on && <Check className="absolute top-2 right-2 size-4 text-navy-600 dark:text-gold-300" />}
               </button>

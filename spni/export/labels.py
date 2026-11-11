@@ -46,6 +46,10 @@ UNAVAILABLE = {
     "not_supported": ("ไม่รองรับบนอุปกรณ์นี้", "Not supported on this device"),
     "agent_declined": ("ไม่ได้อนุญาตให้ติดตั้งแอปตัวช่วย", "Helper app not allowed"),
     "agent_missing": ("ไม่พบไฟล์แอปตัวช่วยในโปรแกรม", "Helper app not bundled"),
+    "line_export_needed": (
+        "ไม่พบไฟล์ส่งออกแชต LINE ในเครื่อง (ข้อความในแอปต้อง root) — ส่งออกแชตจาก LINE หรือใช้บันทึกหน้าจอแชต",
+        "No LINE chat export on the phone (app data needs root) — export chats in LINE or use chat screen capture",
+    ),
     "skipped": ("ไม่ได้เลือก", "Not selected"),
     "error": ("เกิดข้อผิดพลาด", "Error"),
 }

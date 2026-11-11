@@ -569,7 +569,7 @@ class DemoExtractor(BaseExtractor):
         step("contacts", lambda: _contacts(people, account))
         step("calls", lambda: _calls(people, now, 222 if not ios else 318, ios))
         step("sms", lambda: _sms(people, now, 633 if not ios else 480, ios))
-        step("chats", lambda: self._chat_records(ctx, people, now, ios), None if ios else Unavailable.REQUIRES_ROOT.value)
+        step("chats", lambda: self._chat_records(ctx, people, now, ios))
         step("web", lambda: _web(rng, now, 140), None if ios else Unavailable.REQUIRES_ROOT.value)
         step("notes", lambda: _notes(now), None if ios else Unavailable.NOT_SUPPORTED.value)
         step("wifi", lambda: _wifi(rng, now, ios))
@@ -584,9 +584,9 @@ class DemoExtractor(BaseExtractor):
         return info
 
     def _chat_records(self, ctx: ExtractionContext, people: "_People", now: datetime, ios: bool) -> list[ChatMessage]:
-        msgs = _chats(people, now, 555)
         if not ios:
-            return msgs
+            return self._line_exports(ctx)
+        msgs = _chats(people, now, 555)
         # LINE pictures as an iPhone backup provides them (Message Attachments, no extension).
         rng = random.Random(self.seed + 7)  # separate stream: the rest of the demo stays identical
         for m in msgs:
@@ -601,6 +601,21 @@ class DemoExtractor(BaseExtractor):
             self._line_photos.append(photo)
             m.attachment = photo.path
         return msgs
+
+    def _line_exports(self, ctx: ExtractionContext) -> list[ChatMessage]:
+        """Android without root: LINE chats the examiner exported on the phone (see spni.line_export)."""
+        from . import line_export
+
+        chats = []
+        for i, (name, data) in enumerate(line_export.demo_files(), 1):
+            local = ctx.extraction.raw_dir / "line_export" / f"{i:03d}_{safe_name(name, 'chat.txt')}"
+            local.parent.mkdir(parents=True, exist_ok=True)
+            local.write_bytes(data)
+            ctx.register(local, f"/sdcard/Download/{name}")
+            chats.append(line_export.parse_bytes(name, data))
+        owner, _ = line_export.guess_owner(chats)
+        ctx.audit("line.export", f"{len(chats)} LINE chat exports on the phone, owner={owner}")
+        return line_export.to_messages(chats, owner)
 
     def _sims(self, rng: random.Random, now: datetime, ios: bool) -> list[SimCard]:
         carriers = [("AIS", "52001"), ("TrueMove H", "52004"), ("dtac", "52005")]

@@ -1,6 +1,6 @@
 import { useVirtualizer } from "@tanstack/react-virtual";
 import clsx from "clsx";
-import { Lock, MessageSquareText, Paperclip } from "lucide-react";
+import { Lock, MessageCircle, MessageSquareText, Paperclip } from "lucide-react";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { SearchBox } from "../components/DataTable";
 import { EmptySearch, KindView } from "../components/States";
@@ -292,33 +292,56 @@ export function SmsView() {
   );
 }
 
-function MessengerButton({ compact }: { compact?: boolean }) {
+/** Import buttons for chats the phone itself cannot give up (Messenger, LINE exports). */
+function ImportButtons({ compact }: { compact?: boolean }) {
   const { t } = useI18n();
   const { openDialog } = useStore();
+  const items = [
+    { id: "messenger", label: t("ms.open"), mark: (c: string, i: string) => <MessengerMark className={c} icon={i} />, open: () => openDialog("messenger") },
+    {
+      id: "line",
+      label: t("ln.open"),
+      mark: (c: string, i: string) => (
+        <span className={clsx("grid shrink-0 place-items-center bg-[#06c755] text-white", c)}>
+          <MessageCircle className={i} strokeWidth={2.4} />
+        </span>
+      ),
+      open: () => openDialog("messenger", "line"),
+    },
+  ];
   if (compact)
     return (
-      <button
-        onClick={() => openDialog("messenger")}
-        data-testid="chats-messenger"
-        className="focus-ring flex h-9 items-center gap-2 rounded-xl border border-line-strong bg-surface px-2.5 text-left text-[13px] font-semibold text-ink-2 transition hover:bg-surface-2"
-      >
-        <MessengerMark className="size-6 rounded-lg shadow-none" icon="size-3.5" />
-        {t("ms.open")}
-      </button>
+      <div className="grid grid-cols-2 gap-1.5">
+        {items.map((it) => (
+          <button
+            key={it.id}
+            onClick={it.open}
+            data-testid={`chats-${it.id}`}
+            className="focus-ring flex h-9 min-w-0 items-center gap-2 rounded-xl border border-line-strong bg-surface px-2 text-left text-[12.5px] font-semibold text-ink-2 transition hover:bg-surface-2"
+          >
+            {it.mark("size-6 rounded-lg shadow-none", "size-3.5")}
+            <span className="truncate">{it.label}</span>
+          </button>
+        ))}
+      </div>
     );
   return (
-    <Button variant="outline" icon={<MessengerMark className="size-5 rounded-md shadow-none" icon="size-3" />} onClick={() => openDialog("messenger")} data-testid="chats-messenger">
-      {t("ms.open")}
-    </Button>
+    <div className="flex flex-wrap justify-center gap-2">
+      {items.map((it) => (
+        <Button key={it.id} variant="outline" icon={it.mark("size-5 rounded-md shadow-none", "size-3")} onClick={it.open} data-testid={`chats-${it.id}`}>
+          {it.label}
+        </Button>
+      ))}
+    </div>
   );
 }
 
 export function ChatsView() {
   return (
-    <KindView<ChatMessage> kind="chats" action={<MessengerButton />}>
+    <KindView<ChatMessage> kind="chats" action={<ImportButtons />}>
       {(rows) => (
         <Messages
-          toolbar={<MessengerButton compact />}
+          toolbar={<ImportButtons compact />}
           total={rows.length}
           msgs={rows.map((r, i) => ({
             key: String(i),

@@ -23,8 +23,9 @@ from typing import Any
 
 from ..extract import BaseExtractor, ExtractionContext
 from ..media import AUDIO_EXTS, IMAGE_EXTS
-from ..models import App, CallRecord, Contact, DeviceInfo, SimCard, SmsMessage, Unavailable, VoiceMemo, WifiNetwork
-from ..util import normalize_phone, unix_to_ms
+from .. import line_export
+from ..models import App, CallRecord, ChatMessage, Contact, DeviceInfo, SimCard, SmsMessage, Unavailable, VoiceMemo, WifiNetwork
+from ..util import normalize_phone, safe_name, unix_to_ms
 from . import agent as agent_mod
 from .adb import AuditedTransport, Transport
 from .content import ContentQueryError, as_int, build_query, parse_rows
@@ -186,10 +187,20 @@ class AndroidExtractor(BaseExtractor):
         if need_agent:
             self._run_agent(ctx, need_agent)
 
-        for kind in ("chats", "web"):
-            if ctx.wants(kind):
-                ctx.begin(kind)
-                ctx.unavailable(kind, Unavailable.REQUIRES_ROOT.value, "app-private storage (/data/data)")
+        if ctx.wants("chats"):
+            ctx.begin("chats")
+            try:
+                chats = self.line_exports(ctx)
+            except Exception as exc:
+                ctx.error("chats", exc)
+            else:
+                if chats:
+                    ctx.save("chats", chats)
+                else:
+                    ctx.unavailable("chats", Unavailable.LINE_EXPORT_NEEDED.value, "LINE: chat → ≡ → Settings → Export chat history")
+        if ctx.wants("web"):
+            ctx.begin("web")
+            ctx.unavailable("web", Unavailable.REQUIRES_ROOT.value, "app-private storage (/data/data)")
         if ctx.wants("notes"):
             ctx.begin("notes")
             ctx.unavailable("notes", Unavailable.NOT_SUPPORTED.value, "no system notes provider on Android")
@@ -344,7 +355,7 @@ class AndroidExtractor(BaseExtractor):
         sims = []
         for r in rows:
             slot = as_int(r.get("sim_id"), -1)
-            mcc, mnc = r.get("mcc_string") or "", r.get("mnc_string") or ""
+            mcc = r.get("mcc_string") or ""
             sims.append(
                 SimCard(
                     slot=f"SIM {slot + 1}" if slot >= 0 else "",
@@ -373,6 +384,43 @@ class AndroidExtractor(BaseExtractor):
         return apps
 
     # ── files ─────────────────────────────────────────────────────────────
+    def line_exports(self, ctx: ExtractionContext) -> list[ChatMessage]:
+        """LINE chats the examiner exported on the phone (LINE → chat → ≡ → Settings → Export chat history).
+
+        LINE's own database needs root; its text exports land in shared storage
+        (Download, Documents, or wherever "Save" put them), named ``[LINE] …txt``.
+        """
+        files = [f for f in find_files(self.t, ["/sdcard/"], {".txt"}) if f[0].lower().endswith(".txt") and f[1] < 50 << 20]
+        files = [f for f in files if "/Android/obb/" not in f[0]]
+        chats = []
+        checked = 0
+        for i, (path, size, mtime) in enumerate(files):
+            ctx.check_cancel()
+            ctx.progress("chats", 0.1 + 0.8 * i / max(1, len(files)))
+            name = path.rsplit("/", 1)[-1]
+            if "line" not in name.lower():
+                if checked >= 400:  # other text files: only look at the first bytes
+                    continue
+                checked += 1
+                if "[LINE]" not in self.t.shell(f"head -c 64 {shlex.quote(path)}", timeout=20):
+                    continue
+            local = ctx.extraction.raw_dir / "line_export" / f"{len(chats) + 1:03d}_{safe_name(name, 'chat.txt')}"
+            self.t.pull(path, local)
+            data = local.read_bytes()
+            if not line_export.is_line_export(data):
+                local.unlink(missing_ok=True)
+                continue
+            if mtime:
+                os.utime(local, (mtime, mtime))
+            ctx.register(local, path)
+            chats.append(line_export.parse_bytes(name, data))
+        if not chats:
+            return []
+        owner, _ = line_export.guess_owner(chats)
+        messages = line_export.to_messages(chats, owner)
+        ctx.audit("line.export", f"{len(chats)} LINE chat exports on the phone, {len(messages)} messages, owner={owner or '?'}")
+        return messages
+
     def _pull(self, ctx: ExtractionContext, remote: str, mtime: int, sub: str) -> Path:
         rel = PurePosixPath(remote.lstrip("/"))
         local = ctx.extraction.media_dir / sub / Path(*rel.parts[-3:])
