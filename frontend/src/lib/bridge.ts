@@ -22,21 +22,48 @@ declare global {
   }
 }
 
-let mode: Promise<"pywebview" | "http"> | null = null;
+type Mode = "pywebview" | "http";
+let mode: Promise<Mode> | null = null;
 
-function detect(): Promise<"pywebview" | "http"> {
+const hasApi = () => typeof window.pywebview?.api?.state === "function";
+
+/** Does this page's server answer JSON-RPC? Only the development server does. */
+async function rpcAvailable(): Promise<boolean> {
+  try {
+    const r = await fetch("/rpc", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ method: "app_info", args: [] }),
+    });
+    return r.ok && ((await r.json()) as Resp<unknown>)?.ok === true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * pywebview injects its API after the page has loaded, sometimes seconds later
+ * (slow machines, a reload). The desktop app's page server has no /rpc, so only
+ * switch to HTTP when the server really answers it; otherwise keep waiting.
+ */
+function detect(): Promise<Mode> {
   if (!mode) {
-    mode = new Promise((resolve) => {
-      if (window.pywebview?.api) return resolve("pywebview");
-      const timer = window.setTimeout(() => resolve("http"), 900);
-      window.addEventListener(
-        "pywebviewready",
-        () => {
-          window.clearTimeout(timer);
-          resolve("pywebview");
-        },
-        { once: true },
-      );
+    mode = new Promise<Mode>((resolve) => {
+      let done = false;
+      let poll = 0;
+      const finish = (how: Mode) => {
+        if (done) return;
+        done = true;
+        window.clearInterval(poll);
+        document.documentElement.dataset.bridge = how;
+        resolve(how);
+      };
+      if (hasApi()) return finish("pywebview");
+      window.addEventListener("pywebviewready", () => finish("pywebview"), { once: true });
+      poll = window.setInterval(() => hasApi() && finish("pywebview"), 200);
+      window.setTimeout(() => {
+        if (!done) void rpcAvailable().then((yes) => yes && finish("http"));
+      }, 900);
     });
   }
   return mode;

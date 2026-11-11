@@ -138,6 +138,7 @@ def main() -> int:
             return {total: imgs.length, loaded: imgs.filter(i => i.complete && i.naturalWidth > 0).length,
                     broken: document.querySelectorAll('[data-testid=photo-broken]').length, src: imgs[0] ? imgs[0].src : '',
                     tiles: document.querySelectorAll('[data-testid=photo-grid] button').length,
+                    bridge: document.documentElement.dataset.bridge || '',
                     tab: (document.querySelector('[role=tab][aria-selected=true]') || {}).textContent || '',
                     text: (main.innerText || '').slice(0, 300)};
         })()""")
