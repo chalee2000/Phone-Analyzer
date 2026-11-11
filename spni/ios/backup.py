@@ -22,6 +22,10 @@ class BackupPasswordRequired(Exception):
     """The device already encrypts backups with a password the examiner must supply."""
 
 
+class BackupPasswordWrong(Exception):
+    """The backup was made but the examiner's password does not decrypt it (the raw backup is kept)."""
+
+
 @dataclass
 class BackupResult:
     directory: Path  # <dest>/<udid>
@@ -141,7 +145,12 @@ class EncryptedBackupReader(BackupReader):
         from iphone_backup_decrypt import EncryptedBackup
 
         self.backup = EncryptedBackup(backup_directory=str(directory), passphrase=password)
-        self.backup.test_decryption()
+        try:
+            self.backup.test_decryption()
+        except Exception as exc:
+            if type(exc).__name__ == "IncorrectPassphraseError" or "passphrase" in str(exc).lower():
+                raise BackupPasswordWrong(str(exc)) from exc
+            raise
         super().__init__(directory, work)
 
     def _open_manifest(self) -> sqlite3.Connection:

@@ -1,10 +1,10 @@
 import clsx from "clsx";
-import { CircleAlert, CircleCheck, CircleDashed, FileText, Lock, Sparkles, X } from "lucide-react";
+import { CircleAlert, CircleCheck, CircleDashed, FileText, KeyRound, Lock, RotateCcw, Sparkles, X } from "lucide-react";
 import { motion } from "motion/react";
 import { useEffect, useState } from "react";
 import { PhoneMockup } from "../components/PhoneMockup";
 import { TAB_ICONS } from "../components/TabBar";
-import { Button, Modal, ProgressBar, Spinner } from "../components/ui";
+import { Button, Input, Modal, ProgressBar, Spinner } from "../components/ui";
 import { useI18n } from "../lib/i18n";
 import { useStore } from "../lib/store";
 
@@ -34,8 +34,10 @@ function Burst() {
 
 export function ProgressOverlay() {
   const { t } = useI18n();
-  const { job, setJob, cancelExtraction, state, deviceName, setTab, openDialog } = useStore();
+  const { job, setJob, cancelExtraction, retryExtraction, state, deviceName, setTab, openDialog } = useStore();
   const [now, setNow] = useState(Date.now());
+  const [password, setPassword] = useState("");
+  const [showHelp, setShowHelp] = useState(false);
   const done = !!job?.finishedAt;
   const jobId = job?.id;
   useEffect(() => {
@@ -56,6 +58,12 @@ export function ProgressOverlay() {
     : "";
   const close = () => setJob(null);
   const ok = job.status === "completed";
+  const needsPassword = done && (job.message === "ios_backup_password_required" || job.message === "ios_backup_password_wrong");
+  const retry = () => {
+    if (!password) return;
+    void retryExtraction({ ios_backup_password: password });
+    setPassword("");
+  };
 
   return (
     <Modal open dismissable={done} onClose={close} width={900}>
@@ -91,10 +99,36 @@ export function ProgressOverlay() {
               {done
                 ? job.message === "ios_backup_password_required"
                   ? t("pg.passwordRequired")
-                  : job.message || `${t("pg.items", { n: total.toLocaleString() })} · ${t("pg.elapsed", { t: elapsed(job.finishedAt! - job.startedAt) })}`
+                  : job.message === "ios_backup_password_wrong"
+                    ? t("pg.passwordWrong")
+                    : job.message || `${t("pg.items", { n: total.toLocaleString() })} · ${t("pg.elapsed", { t: elapsed(job.finishedAt! - job.startedAt) })}`
                 : stageText}
             </div>
           </div>
+          {needsPassword && (
+            <div className="border-b border-line bg-gold-50/60 px-6 py-4 dark:bg-gold-500/10" data-testid="pg-password">
+              <label className="text-[13px] font-semibold text-ink">{t("pg.passwordLabel")}</label>
+              <div className="mt-1.5 flex gap-2">
+                <Input
+                  type="password"
+                  autoFocus
+                  icon={<KeyRound className="size-4" />}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && retry()}
+                  className="flex-1"
+                  data-testid="pg-password-input"
+                />
+                <Button variant="gold" icon={<RotateCcw className="size-4" />} disabled={!password} onClick={retry} data-testid="pg-retry">
+                  {t("pg.retry")}
+                </Button>
+              </div>
+              <button type="button" onClick={() => setShowHelp((v) => !v)} className="mt-2 text-[12.5px] font-semibold text-navy-600 hover:underline dark:text-gold-300">
+                {t("pg.unknownPassword")}
+              </button>
+              {showHelp && <p className="mt-1 text-[12.5px] leading-relaxed text-ink-2">{t("pg.unknownPasswordSteps")}</p>}
+            </div>
+          )}
           <div className="grid max-h-[420px] min-h-0 grid-cols-2 gap-x-4 gap-y-1 overflow-auto px-6 py-4">
             {steps.map((s) => (
               <div key={s.kind} className="flex items-center gap-3 rounded-xl px-2 py-2">

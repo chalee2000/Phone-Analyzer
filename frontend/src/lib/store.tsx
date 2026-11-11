@@ -75,6 +75,7 @@ function useStoreValue() {
   const [detected, setDetected] = useState<ScannedDevice[]>([]);
   const [scanning, setScanning] = useState(false);
   const [connecting, setConnecting] = useState<string | null>(null);
+  const lastExtract = useRef<Record<string, unknown>>({});
   const [statusText, setStatusText] = useState<string>("");
   const [loaded, setLoaded] = useState(false);
   const loading = useRef<Set<Kind>>(new Set());
@@ -207,6 +208,7 @@ function useStoreValue() {
 
   const startExtraction = useCallback(
     async (options: Record<string, unknown>) => {
+      lastExtract.current = options;
       try {
         const res = await call<{ job: string; extraction_id: string; kinds: Kind[] }>("start_extraction", options);
         const steps: Partial<Record<Kind, StepState>> = {};
@@ -220,6 +222,9 @@ function useStoreValue() {
     },
     [refresh, resetRecords, errorText],
   );
+
+  /** Run the last extraction again with some options changed (e.g. the iPhone's backup password). */
+  const retryExtraction = useCallback((patch: Record<string, unknown>) => startExtraction({ ...lastExtract.current, ...patch }), [startExtraction]);
 
   const cancelExtraction = useCallback(() => call("cancel_extraction"), []);
 
@@ -336,6 +341,7 @@ function useStoreValue() {
     disconnect,
     closeExtraction,
     startExtraction,
+    retryExtraction,
     cancelExtraction,
     exportReport,
     exportNetwork,

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import os
 from pathlib import Path, PurePosixPath
 from typing import Any
@@ -32,8 +33,8 @@ class IOSExtractor(BaseExtractor):
                 try:
                     enc = await lockdown.get_value(domain="com.apple.mobile.backup", key="WillEncrypt")
                     info.extra["backup_encrypted"] = "1" if enc else "0"
-                except Exception:
-                    pass
+                except Exception as exc:  # the extraction still checks before the backup starts
+                    logging.getLogger("spni.ios").warning("could not read WillEncrypt: %s: %s", type(exc).__name__, exc)
                 return info
             finally:
                 await lockdown.close()

@@ -118,6 +118,11 @@ export function ExtractDialog() {
               <Switch checked={tempEnc} onChange={setTempEnc} />
             </div>
           )}
+          {ios && !encrypted && (
+            <Field label={t("ex.passwordOptional")} hint={t("ex.passwordOptionalDesc")}>
+              <Input type="password" icon={<KeyRound className="size-4" />} value={password} onChange={(e) => setPassword(e.target.value)} />
+            </Field>
+          )}
           {ios && encrypted && (
             <div className="rounded-2xl border border-gold-200 bg-gold-50/60 p-4 dark:border-gold-500/30 dark:bg-gold-500/10">
               <Field label={t("ex.password")} hint={t("ex.passwordDesc")}>

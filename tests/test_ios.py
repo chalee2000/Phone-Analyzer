@@ -187,3 +187,58 @@ def test_iphone_states_from_the_scan(monkeypatch):
         "A": "not_trusted", "B": "not_trusted", "C": "locked", "D": "error", "E": "ready", "F": "not_trusted", "G": "ready"}
     assert found["D"]["detail"].startswith("ConnectionResetError: usbmux went away")
     assert found["E"]["model"] == "iPhone 15" and found["E"]["name"] == "iPhone ของสมชาย"
+
+
+def test_wrong_backup_password_is_reported_as_such(tmp_path, monkeypatch):
+    import iphone_backup_decrypt
+    import pytest
+
+    from spni.ios.backup import BackupPasswordWrong, BackupResult, open_reader
+
+    class FakeBackup:
+        def __init__(self, backup_directory, passphrase):
+            self.passphrase = passphrase
+
+        def test_decryption(self):
+            raise iphone_backup_decrypt.IncorrectPassphraseError("Failed to decrypt keys: incorrect passphrase?")
+
+    monkeypatch.setattr(iphone_backup_decrypt, "EncryptedBackup", FakeBackup)
+    result = BackupResult(directory=tmp_path / "backup", encrypted=True, password="nope", temporary_password=False)
+    with pytest.raises(BackupPasswordWrong):
+        open_reader(result, tmp_path / "decoded")
+
+
+def test_backup_password_messages_from_the_job(tmp_path, monkeypatch):
+    """The UI offers a password box for these two messages."""
+    import time
+
+    from spni.api import Api
+    from spni.events import EventBus
+    from spni.extract import BaseExtractor
+    from spni.ios.backup import BackupPasswordRequired, BackupPasswordWrong
+    from spni.models import DeviceInfo
+
+    for exc, message in ((BackupPasswordRequired(), "ios_backup_password_required"), (BackupPasswordWrong("bad"), "ios_backup_password_wrong")):
+        class Phone(BaseExtractor):
+            platform, method = "ios", "itunes-backup"
+
+            def device_info(self):
+                return DeviceInfo(platform="ios", serial="00008110-TEST", brand="Apple", model="iPhone 13")
+
+            def run(self, ctx, _exc=exc):
+                raise _exc
+
+        bus = EventBus()
+        events = []
+        bus.subscribe(lambda n, p: events.append((n, p)))
+        api = Api(bus, tmp_path / message, demo=False)
+        monkeypatch.setattr(api, "_make_extractor", lambda device_id: Phone())
+        assert api.connect("ios:00008110-TEST")["ok"]
+        assert api.start_extraction({"kinds": ["calls"], "ios_backup_password": "secret"})["ok"]
+        for _ in range(100):
+            if any(n == "extraction.done" for n, _ in events):
+                break
+            time.sleep(0.05)
+        done = [p for n, p in events if n == "extraction.done"][-1]
+        assert done["status"] == "failed" and done["message"] == message
+        assert all("secret" not in e["detail"] for e in api._case.audit_entries(done["extraction_id"]))  # never logged

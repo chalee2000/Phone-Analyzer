@@ -284,6 +284,8 @@ class Api:
             status, message = "failed", f"{type(exc).__name__}: {exc}"
             if type(exc).__name__ == "BackupPasswordRequired":
                 message = "ios_backup_password_required"
+            elif type(exc).__name__ == "BackupPasswordWrong":
+                message = "ios_backup_password_wrong"
             ctx.audit("extraction.error", message)
         counts = ctx.extraction.finish(status)
         info = ctx.extraction.case.extraction_info(ctx.extraction.id)
