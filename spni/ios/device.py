@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from typing import Any
 
 from ..models import DeviceInfo, SimCard
@@ -24,6 +25,8 @@ PRODUCT_NAMES = {
     "iPhone18,4": "iPhone Air",
 }
 
+log = logging.getLogger("spni.ios")
+
 CARRIERS = {"52001": "AIS", "52003": "AIS", "52004": "TrueMove H", "52005": "dtac", "52018": "dtac", "52015": "NT", "52047": "NT"}
 
 
@@ -37,8 +40,15 @@ def run(coro):
 
 
 async def _list_devices() -> list[dict[str, Any]]:
+    """iPhones on USB with their state.
+
+    The scan never pairs: iOS shows "Trust This Computer?" only when a host
+    asks to pair, which ``connect()`` does when the examiner presses
+    "Request trust". So an iPhone that has not paired yet is ``not_trusted``
+    here and stays connectable.
+    """
     from pymobiledevice3 import usbmux
-    from pymobiledevice3.exceptions import NotPairedError, PasswordRequiredError
+    from pymobiledevice3.exceptions import InvalidHostIDError, NotPairedError, PasswordRequiredError
     from pymobiledevice3.lockdown import create_using_usbmux
 
     out = []
@@ -56,12 +66,14 @@ async def _list_devices() -> list[dict[str, Any]]:
                     entry["state"] = "not_trusted"
             finally:
                 await lockdown.close()
-        except (NotPairedError,):
+        except (NotPairedError, InvalidHostIDError):  # never paired, or the trust was reset on the phone
             entry["state"] = "not_trusted"
         except PasswordRequiredError:
             entry["state"] = "locked"
-        except Exception:
-            entry["state"] = "not_trusted"
+        except Exception as exc:  # say what went wrong instead of guessing "not trusted"
+            log.warning("iPhone %s: %s: %s", dev.serial, type(exc).__name__, exc)
+            entry["state"] = "error"
+            entry["detail"] = f"{type(exc).__name__}: {exc}"[:300]
         out.append(entry)
     return out
 

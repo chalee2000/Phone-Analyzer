@@ -60,6 +60,8 @@ def ios_checks() -> list[dict[str, Any]]:
         out.append(check("device_not_trusted", "warn"))
     elif "locked" in states:
         out.append(check("device_locked", "warn"))
+    elif "error" in states:
+        out.append(check("device_error", "fail", "; ".join(d.get("detail", "") for d in devices if d["state"] == "error")))
     else:
         out.append(check("device_seen", "fail"))
     return out

@@ -25,7 +25,7 @@ import { Badge, Button, Modal, Spinner } from "../components/ui";
 import { call } from "../lib/bridge";
 import { useI18n } from "../lib/i18n";
 import { useStore } from "../lib/store";
-import type { DiagnosticCheck, Platform, ScannedDevice } from "../lib/types";
+import { canRequestTrust, type DiagnosticCheck, type Platform, type ScannedDevice } from "../lib/types";
 import { androidSteps, BRANDS, FRAME_MS, iosSteps, type Screen } from "./guides";
 
 const ROW = 33;
@@ -276,10 +276,12 @@ export function DiagnosticsDialog() {
     await runChecks();
     const res = await call<{ devices: ScannedDevice[] }>("scan_devices", platform);
     const ready = res.devices.filter((d) => d.platform === platform && d.state === "ready" && !d.demo);
-    if (ready.length) {
+    const trust = res.devices.filter((d) => d.platform === platform && canRequestTrust(d) && !d.demo);
+    if (ready.length || trust.length === 1) {
       closeDialog("diag");
       setPlatform(platform);
-      await connect(ready[0].id);
+      if (!ready.length) toast.info(t("toast.trustNeeded"));
+      await connect((ready[0] ?? trust[0]).id);
     }
   };
   const restartAdb = async () => {
@@ -438,6 +440,7 @@ export function DiagnosticsDialog() {
               <>
                 <Tip title={t("tip.iosUnlock")} desc={t("tip.iosUnlockDesc")} />
                 <Tip title={t("tip.iosTrust")} desc={t("tip.iosTrustDesc")} />
+                <Tip title={t("tip.iosReset")} desc={t("tip.iosResetDesc")} />
                 <Tip title={t("tip.iosDriver")} desc={t("tip.iosDriverDesc")} status={status("apple_service")} />
                 <Tip title={t("tip.cable")} desc={t("tip.cableDesc")} />
               </>
@@ -462,7 +465,7 @@ export function DiagnosticsDialog() {
 
       <div className="flex shrink-0 items-center gap-2 border-t border-line bg-surface-2 px-6 py-3.5">
         <Button variant="primary" icon={<Search className="size-4" />} onClick={() => void recheck()} loading={checking} data-testid="diag-recheck">
-          {t("diag.recheck")}
+          {t(ios && status("device_not_trusted") ? "diag.requestTrust" : "diag.recheck")}
         </Button>
         {!ios && (
           <Button variant="outline" icon={<RefreshCw className="size-4" />} onClick={() => void restartAdb()} loading={restarting}>

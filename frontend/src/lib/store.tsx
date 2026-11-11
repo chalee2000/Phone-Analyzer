@@ -2,7 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { toast } from "sonner";
 import { ApiError, call, subscribe } from "./bridge";
 import { useI18n } from "./i18n";
-import type { AppInfo, AppState, Kind, Platform, ScannedDevice, StepEvent } from "./types";
+import { canRequestTrust, type AppInfo, type AppState, type Kind, type Platform, type ScannedDevice, type StepEvent } from "./types";
 
 export type Tab = "device" | "network" | "timeline" | "comms" | Kind;
 export type Theme = "light" | "dark";
@@ -74,6 +74,7 @@ function useStoreValue() {
   const [dialogs, setDialogs] = useState<Dialogs>(NO_DIALOGS);
   const [detected, setDetected] = useState<ScannedDevice[]>([]);
   const [scanning, setScanning] = useState(false);
+  const [connecting, setConnecting] = useState<string | null>(null);
   const [statusText, setStatusText] = useState<string>("");
   const [loaded, setLoaded] = useState(false);
   const loading = useRef<Set<Kind>>(new Set());
@@ -134,6 +135,7 @@ function useStoreValue() {
 
   const connect = useCallback(
     async (id: string) => {
+      setConnecting(id);
       try {
         const dev = await call<AppState["device"]>("connect", id);
         resetRecords();
@@ -146,6 +148,8 @@ function useStoreValue() {
       } catch (e) {
         toast.error(errorText(e));
         return false;
+      } finally {
+        setConnecting(null);
       }
     },
     [refresh, resetRecords, t, errorText, setPlatform],
@@ -165,6 +169,10 @@ function useStoreValue() {
           await connect((real[0] ?? ready[0]).id);
         } else if (ready.length > 1) {
           openDialog("picker", ready);
+        } else if (devices.filter(canRequestTrust).length === 1) {
+          // iOS asks "Trust This Computer?" only when a program requests pairing: do it now.
+          toast.info(t("toast.trustNeeded"));
+          await connect(devices.filter(canRequestTrust)[0].id);
         } else if (devices.length) {
           toast.warning(t("toast.notReady", { state: t(`state.${devices[0].state}`) }));
           openDialog("diag", { platform, notFound: false });
@@ -322,6 +330,7 @@ function useStoreValue() {
     closeDialog,
     detected,
     scanning,
+    connecting,
     scan,
     connect,
     disconnect,

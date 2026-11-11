@@ -1,5 +1,5 @@
 import clsx from "clsx";
-import { ChevronRight, CircleHelp, History, MessageCircle, Search, ShieldCheck, Sparkles, Usb } from "lucide-react";
+import { ChevronRight, CircleHelp, History, MessageCircle, Search, ShieldCheck, Smartphone, Sparkles, Usb } from "lucide-react";
 import { motion } from "motion/react";
 import { useEffect } from "react";
 import { AndroidIcon, IphoneIcon } from "../components/icons";
@@ -7,6 +7,7 @@ import { PhoneMockup } from "../components/PhoneMockup";
 import { Badge, Button } from "../components/ui";
 import { useI18n } from "../lib/i18n";
 import { useStore } from "../lib/store";
+import { canRequestTrust } from "../lib/types";
 
 function ConnectScreen() {
   const { lang } = useI18n();
@@ -73,7 +74,7 @@ function Illustration() {
 
 export function ConnectView() {
   const { t } = useI18n();
-  const { platform, setPlatform, scan, scanning, openDialog, detected, connect, info } = useStore();
+  const { platform, setPlatform, scan, scanning, openDialog, detected, connect, connecting, info } = useStore();
 
   useEffect(() => {
     void scan({ silent: true });
@@ -145,12 +146,8 @@ export function ConnectView() {
             <div className="mb-2 text-[12.5px] font-semibold text-muted">{t("connect.detected")}</div>
             <div className="flex flex-col gap-2">
               {detected.map((d) => (
-                <motion.div
-                  key={d.id}
-                  initial={{ opacity: 0, y: 6 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="flex items-center gap-3 rounded-2xl border border-line bg-surface-2 p-3"
-                >
+                <motion.div key={d.id} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} className="rounded-2xl border border-line bg-surface-2">
+                <div className="flex items-center gap-3 p-3">
                   <span className="grid size-10 place-items-center rounded-xl bg-surface text-ink-2 shadow-sm">
                     {d.platform === "ios" ? <IphoneIcon className="size-5" /> : <AndroidIcon className="size-5 text-[#3DDC84]" />}
                   </span>
@@ -173,9 +170,27 @@ export function ConnectView() {
                       · <span className="font-mono">{d.serial}</span>
                     </div>
                   </div>
-                  <Button size="sm" variant={d.state === "ready" ? "primary" : "outline"} disabled={d.state !== "ready"} onClick={() => void connect(d.id)} data-testid={`connect-${d.id}`}>
-                    {t("connect.connect")} <ChevronRight className="size-4" />
+                  <Button
+                    size="sm"
+                    variant={d.state === "ready" ? "primary" : canRequestTrust(d) ? "gold" : "outline"}
+                    disabled={!(d.state === "ready" || canRequestTrust(d)) || (!!connecting && connecting !== d.id)}
+                    loading={connecting === d.id}
+                    onClick={() => void connect(d.id)}
+                    data-testid={`connect-${d.id}`}
+                  >
+                    {t(d.state !== "ready" && canRequestTrust(d) ? "connect.trust" : "connect.connect")} <ChevronRight className="size-4" />
                   </Button>
+                </div>
+                {connecting === d.id && canRequestTrust(d) && (
+                  <div className="mx-3 mb-3 flex items-start gap-3 rounded-xl border border-gold-200 bg-gold-50 px-3.5 py-3 text-[13px] text-gold-800 dark:border-gold-500/30 dark:bg-gold-500/10 dark:text-gold-200" data-testid="connect-pairing">
+                    <Smartphone className="mt-0.5 size-5 shrink-0" />
+                    <div>
+                      <div className="font-bold">{t("connect.pairingTitle")}</div>
+                      <div className="leading-relaxed">{t("connect.pairing")}</div>
+                    </div>
+                  </div>
+                )}
+                {d.state === "error" && d.detail && <div className="mx-3 mb-3 font-mono text-[11.5px] break-all text-rose-600 dark:text-rose-300">{d.detail}</div>}
                 </motion.div>
               ))}
             </div>

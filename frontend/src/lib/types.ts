@@ -49,12 +49,16 @@ export interface ScannedDevice {
   id: string;
   platform: Platform;
   serial: string;
-  state: string; // ready | unauthorized | offline | not_trusted | locked
+  state: string; // ready | unauthorized | offline | not_trusted | locked | error
   brand: string;
   model: string;
   name: string;
   demo?: boolean;
+  detail?: string;
 }
+
+/** An iPhone that only needs the examiner to tap "Trust" (pairing is requested on connect). */
+export const canRequestTrust = (d: ScannedDevice) => d.platform === "ios" && (d.state === "not_trusted" || d.state === "locked");
 
 export interface ConnectedDevice {
   id: string;

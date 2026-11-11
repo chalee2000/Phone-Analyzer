@@ -135,3 +135,52 @@ def test_backup_reader_resolves_files(tmp_path):
     row = reader.find("Home%", "%History.db")[0]
     assert reader.file_info(row)["mtime"] == 1700000000
     reader.close()
+
+
+def test_iphone_states_from_the_scan(monkeypatch):
+    """Not paired → not_trusted (still connectable to ask for trust); real errors are reported, not hidden."""
+    import types
+
+    from pymobiledevice3 import exceptions, lockdown, usbmux
+
+    from spni.ios import device
+
+    outcomes = {
+        "A": exceptions.NotPairedError(),
+        "B": exceptions.InvalidHostIDError(),
+        "C": exceptions.PasswordRequiredError(),
+        "D": ConnectionResetError("usbmux went away"),
+        "E": None,  # paired and trusted
+        "F": False,  # a pair record the phone no longer accepts
+    }
+
+    class Lockdown:
+        def __init__(self, valid: bool) -> None:
+            self.valid = valid
+
+        async def get_value(self, key=None, domain=None):
+            return {"ProductType": "iPhone15,4", "DeviceName": "iPhone ของสมชาย"}[key]
+
+        async def validate_pairing(self):
+            return self.valid
+
+        async def close(self):
+            pass
+
+    async def list_devices():
+        return [types.SimpleNamespace(serial=s, is_usb=True) for s in outcomes]
+
+    async def create(serial=None, autopair=True, **kw):
+        assert autopair is False  # scanning must never pop the trust dialog
+        out = outcomes[serial]
+        if isinstance(out, Exception):
+            raise out
+        return Lockdown(out is None)
+
+    monkeypatch.setattr(usbmux, "list_devices", list_devices)
+    monkeypatch.setattr(lockdown, "create_using_usbmux", create)
+    found = {d["serial"]: d for d in device.list_devices()}
+    assert {k: v["state"] for k, v in found.items()} == {
+        "A": "not_trusted", "B": "not_trusted", "C": "locked", "D": "error", "E": "ready", "F": "not_trusted"}
+    assert found["D"]["detail"].startswith("ConnectionResetError: usbmux went away")
+    assert found["E"]["model"] == "iPhone 15" and found["E"]["name"] == "iPhone ของสมชาย"
