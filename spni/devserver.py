@@ -4,6 +4,7 @@
 
 * ``POST /rpc``  body ``{"method": "scan_devices", "args": [...]}``
 * ``GET /events`` Server-Sent Events stream of the event bus
+* ``GET /media/<token>/…`` case media (same origin as the UI)
 * ``GET /*``     the built UI from ``frontend/dist`` (if present)
 
 Binds to 127.0.0.1 only.
@@ -15,20 +16,19 @@ import argparse
 import json
 import os
 import queue
+import secrets
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse
 
 from .api import Api
+from .app_server import StaticMediaMixin
 from .events import EventBus
-from .media_server import MediaServer, send_file
 from .paths import frontend_dist
 
 
-def make_server(api: Api, bus: EventBus, port: int) -> ThreadingHTTPServer:
-    dist = frontend_dist()
-
-    class Handler(BaseHTTPRequestHandler):
+def make_server(api: Api, bus: EventBus, port: int, token: str | None = None) -> ThreadingHTTPServer:
+    class Handler(StaticMediaMixin, BaseHTTPRequestHandler):
         protocol_version = "HTTP/1.1"
 
         def log_message(self, *args):
@@ -64,17 +64,7 @@ def make_server(api: Api, bus: EventBus, port: int) -> ThreadingHTTPServer:
             if path == "/events":
                 self._events()
                 return
-            target = (dist / path.lstrip("/")).resolve() if path != "/" else dist / "index.html"
-            try:
-                target.relative_to(dist.resolve())
-            except ValueError:
-                target = dist / "index.html"
-            if not target.is_file():
-                target = dist / "index.html"
-            if not target.is_file():
-                self._json(404, {"ok": False, "error": "ui_not_built"})
-                return
-            send_file(self, target)
+            self.serve_static_or_media(path)
 
         def _events(self) -> None:
             q: queue.Queue = queue.Queue()
@@ -100,8 +90,12 @@ def make_server(api: Api, bus: EventBus, port: int) -> ThreadingHTTPServer:
             finally:
                 unsubscribe()
 
+    Handler.dist = frontend_dist()
+    Handler.media_token = token or secrets.token_urlsafe(16)
+    Handler.root_getter = staticmethod(lambda: api._cases_root)
     server = ThreadingHTTPServer(("127.0.0.1", port), Handler)
     server.daemon_threads = True
+    server.media_token = Handler.media_token  # type: ignore[attr-defined]
     return server
 
 
@@ -113,10 +107,8 @@ def main() -> None:
     args = parser.parse_args()
     bus = EventBus()
     api = Api(bus, args.cases, demo=args.demo or os.environ.get("SPNI_DEMO") == "1")
-    media = MediaServer(lambda: api._cases_root)
-    media.start()
-    api._set_media_base(media.base_url)
     server = make_server(api, bus, args.port)
+    api._set_media_base(f"http://127.0.0.1:{server.server_address[1]}/media/{server.media_token}")
     print(f"Phone Analysis devserver on http://127.0.0.1:{args.port}  (cases: {api._cases_root})", flush=True)
     try:
         server.serve_forever()

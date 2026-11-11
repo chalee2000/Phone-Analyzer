@@ -12,6 +12,7 @@ import { useStore } from "../lib/store";
 import type { ChatMessage, SmsMessage } from "../lib/types";
 import { Avatar } from "./CallsView";
 import { useMediaUrl } from "./MiscViews";
+import { MediaImage } from "./PhotosView";
 
 interface Msg {
   key: string;
@@ -121,7 +122,7 @@ function Attachment({ rel, out, small }: { rel: string; out: boolean; small?: bo
   if (src && IMAGE_RE.test(rel))
     return (
       <a href={src} target="_blank" rel="noreferrer" className="mb-1.5 block">
-        <img src={src} alt={name} loading="lazy" className={clsx("max-w-full rounded-xl object-cover", small ? "max-h-28" : "max-h-64")} />
+        <MediaImage rel={rel} alt={name} lazy className={clsx("max-w-full rounded-xl object-cover", small ? "max-h-28" : "max-h-64")} />
       </a>
     );
   if (src && VIDEO_RE.test(rel)) return <video src={src} controls preload="metadata" className="mb-1.5 max-h-64 max-w-full rounded-xl" />;

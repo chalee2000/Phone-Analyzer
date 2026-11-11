@@ -7,10 +7,10 @@ import os
 import sys
 from pathlib import Path
 
-from . import APP_NAME, __version__
+from . import APP_NAME, __version__, logs
 from .api import Api
+from .app_server import AppServer
 from .events import EventBus, js_dispatch
-from .media_server import MediaServer
 from .paths import frontend_dist
 
 
@@ -24,19 +24,21 @@ def main() -> None:
 
     import webview
 
+    logs.setup()
     bus = EventBus()
     api = Api(bus, args.cases, demo=args.demo or os.environ.get("SPNI_DEMO") == "1")
-    media = MediaServer(lambda: api._cases_root)
-    media.start()
-    api._set_media_base(media.base_url)
+    # The UI and the case media come from one local server (same origin), so
+    # the WebView never has to load images from a second port.
+    server = AppServer(frontend_dist(), lambda: api._cases_root)
+    server.start()
+    api._set_media_base(server.media_base)
 
     if args.dev:
         url = os.environ.get("SPNI_UI_URL", "http://localhost:5173")
     else:
-        index = frontend_dist() / "index.html"
-        if not index.is_file():
+        if not (frontend_dist() / "index.html").is_file():
             sys.exit("UI not built: run `npm run build` in the frontend folder first.")
-        url = str(index)
+        url = server.url
 
     window = webview.create_window(
         f"{APP_NAME} v{__version__}",
@@ -60,8 +62,11 @@ def main() -> None:
 
     bus.subscribe(forward)
     storage = Path(os.environ.get("APPDATA", Path.home())) / APP_NAME / "webview"
-    webview.start(debug=args.debug, http_server=not args.dev, private_mode=False, storage_path=str(storage))
-    media.stop()
+    # Test hook for CI (scripts/ui_check.py): drive the real WebView2 window over CDP.
+    if os.environ.get("SPNI_REMOTE_DEBUGGING_PORT"):
+        webview.settings["REMOTE_DEBUGGING_PORT"] = int(os.environ["SPNI_REMOTE_DEBUGGING_PORT"])
+    webview.start(debug=args.debug, private_mode=False, storage_path=str(storage))
+    server.stop()
 
 
 if __name__ == "__main__":

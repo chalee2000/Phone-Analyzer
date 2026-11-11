@@ -1,15 +1,67 @@
 import clsx from "clsx";
-import { Camera, ChevronLeft, ChevronRight, Clock, FileImage, Folder, Hash, HardDrive, MapPin, Maximize2, X } from "lucide-react";
+import { Camera, ChevronLeft, ChevronRight, Clock, ExternalLink, FileImage, Folder, Hash, HardDrive, ImageOff, MapPin, Maximize2, X } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { CopyButton } from "../components/DevicePanel";
 import { SearchBox, Toolbar } from "../components/DataTable";
 import { EmptySearch, KindView } from "../components/States";
-import { Chip } from "../components/ui";
+import { toast } from "sonner";
+import { Button, Chip } from "../components/ui";
+import { call } from "../lib/bridge";
 import { fmtDateTime, fmtMonth, fmtSize, matches } from "../lib/format";
 import { useI18n } from "../lib/i18n";
 import type { Photo } from "../lib/types";
 import { useMediaUrl } from "./MiscViews";
+
+// Browsers cannot draw these; the JPEG thumbnail stands in for the original.
+const NOT_DISPLAYABLE = /\.(heic|heif|dng)$/i;
+let reported = false;
+
+async function openInViewer(rel: string, failed = false) {
+  try {
+    const info = await call<{ path: string; exists: boolean }>("media_probe", rel, failed);
+    if (info.exists) await call("open_file", info.path);
+  } catch {
+    /* the toast below already told the examiner */
+  }
+}
+
+/** A case image that degrades to a clear "cannot display" tile (and tells support why). */
+export function MediaImage({ rel, alt, className, lazy }: { rel: string; alt: string; className?: string; lazy?: boolean }) {
+  const { t } = useI18n();
+  const media = useMediaUrl();
+  const [failed, setFailed] = useState(false);
+  useEffect(() => setFailed(false), [rel]);
+  if (failed)
+    return (
+      <span className={clsx("flex flex-col items-center justify-center gap-1 bg-surface-3 p-2 text-center text-[11px] text-muted", className)} data-testid="photo-broken">
+        <ImageOff className="size-5 text-faint" />
+        {t("photos.broken")}
+      </span>
+    );
+  return (
+    <img
+      src={media(rel)}
+      alt={alt}
+      loading={lazy ? "lazy" : undefined}
+      className={className}
+      onError={() => {
+        setFailed(true);
+        if (reported) return;
+        reported = true;
+        void call<{ path: string; exists: boolean; log: string }>("media_probe", rel, true)
+          .then((info) =>
+            toast.warning(t("photos.brokenToast"), {
+              description: info.log ? t("photos.brokenLog", { log: info.log }) : undefined,
+              action: info.exists ? { label: t("photos.openFile"), onClick: () => void call("open_file", info.path) } : undefined,
+              duration: 15000,
+            }),
+          )
+          .catch(() => toast.warning(t("photos.brokenToast")));
+      }}
+    />
+  );
+}
 
 function Meta({ icon, label, children }: { icon: ReactNode; label: string; children: ReactNode }) {
   return (
@@ -27,7 +79,6 @@ function Meta({ icon, label, children }: { icon: ReactNode; label: string; child
 
 function Lightbox({ photos, index, onClose, onMove }: { photos: Photo[]; index: number; onClose: () => void; onMove: (i: number) => void }) {
   const { t } = useI18n();
-  const media = useMediaUrl();
   const p = photos[index];
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -41,7 +92,7 @@ function Lightbox({ photos, index, onClose, onMove }: { photos: Photo[]; index: 
   return (
     <motion.div className="fixed inset-0 z-40 flex bg-navy-950/92 backdrop-blur-sm" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} data-testid="lightbox">
       <div className="relative flex min-w-0 flex-1 items-center justify-center p-10">
-        <img src={media(p.path)} alt={p.name} className="max-h-full max-w-full rounded-xl object-contain shadow-2xl" />
+        <MediaImage rel={NOT_DISPLAYABLE.test(p.path) && p.thumb ? p.thumb : p.path} alt={p.name} className="max-h-full max-w-full rounded-xl object-contain shadow-2xl" />
         <button onClick={() => onMove(Math.max(0, index - 1))} disabled={index === 0} className="absolute left-4 grid size-12 place-items-center rounded-full bg-white/10 text-white hover:bg-white/20 disabled:opacity-30">
           <ChevronLeft className="size-6" />
         </button>
@@ -60,6 +111,7 @@ function Lightbox({ photos, index, onClose, onMove }: { photos: Photo[]; index: 
         <div className="flex items-center gap-2 border-b border-line px-5 py-4">
           <FileImage className="size-5 text-navy-500 dark:text-gold-300" />
           <span className="min-w-0 flex-1 truncate font-display text-[16px] font-semibold text-ink">{p.name}</span>
+          <Button size="sm" variant="ghost" icon={<ExternalLink className="size-4" />} onClick={() => void openInViewer(p.path)} title={t("photos.openFile")} />
           <button onClick={onClose} className="grid size-9 place-items-center rounded-xl text-muted hover:bg-surface-3">
             <X className="size-5" />
           </button>
@@ -104,7 +156,6 @@ function Lightbox({ photos, index, onClose, onMove }: { photos: Photo[]; index: 
 
 function Photos({ rows }: { rows: Photo[] }) {
   const { t, lang } = useI18n();
-  const media = useMediaUrl();
   const [q, setQ] = useState("");
   const [album, setAlbum] = useState("all");
   const [gpsOnly, setGpsOnly] = useState(false);
@@ -159,7 +210,7 @@ function Photos({ rows }: { rows: Photo[] }) {
                   onClick={() => setOpen(i)}
                   className="group focus-ring relative aspect-square overflow-hidden rounded-xl bg-surface-3"
                 >
-                  <img src={media(p.thumb || p.path)} alt={p.name} loading="lazy" className="size-full object-cover transition duration-300 group-hover:scale-105" />
+                  <MediaImage rel={p.thumb || p.path} alt={p.name} lazy className="size-full object-cover transition duration-300 group-hover:scale-105" />
                   <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent px-2 pt-6 pb-1.5 text-left text-[11px] text-white opacity-0 transition group-hover:opacity-100">
                     <span className="tabular block">{fmtDateTime(p.taken)}</span>
                   </span>

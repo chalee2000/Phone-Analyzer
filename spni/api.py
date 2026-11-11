@@ -11,6 +11,7 @@ progress through the event bus.
 from __future__ import annotations
 
 import functools
+import logging
 import os
 import subprocess
 import sys
@@ -20,7 +21,7 @@ import uuid
 from pathlib import Path
 from typing import Any, Callable
 
-from . import __version__, diagnostics
+from . import __version__, diagnostics, logs
 from .android.adb import AdbManager
 from .analysis import comms as comms_mod
 from .analysis import network as network_mod
@@ -53,6 +54,7 @@ def endpoint(fn: Callable) -> Callable:
             return {"ok": False, "error": code, "message": str(exc)}
         except Exception as exc:  # unexpected: report, never crash the UI
             traceback.print_exc()
+            logging.getLogger("spni.api").exception("%s failed", fn.__name__)
             return {"ok": False, "error": "internal", "message": f"{type(exc).__name__}: {exc}"}
 
     wrapper._endpoint = True  # type: ignore[attr-defined]
@@ -97,6 +99,7 @@ class Api:
             "media_base": self._media_base,
             "platform": sys.platform,
             "agent_available": agent_apk().is_file(),
+            "log_path": str(logs.path() or ""),
             "kinds": ALL_KINDS,
         }
 
@@ -424,6 +427,25 @@ class Api:
             subprocess.Popen(["open", "-R", str(target)])
         else:
             subprocess.Popen(["xdg-open", str(target.parent if target.is_file() else target)])
+
+    @endpoint
+    def media_probe(self, rel: str, failed: bool = True) -> dict[str, Any]:
+        """A media file of the open extraction that the UI could not display: where it is.
+
+        Logged so a support request carries the reason; the UI offers to open the
+        file in the system viewer instead.
+        """
+        case = self._require_case()
+        if not self._extraction_id:
+            raise ApiError("nothing_to_export")
+        target = self._allowed(str(case.path / "extractions" / self._extraction_id / rel))
+        exists = target.is_file()
+        size = target.stat().st_size if exists else None
+        if failed:
+            logging.getLogger("spni.media").warning(
+                "UI could not display %s (exists=%s, size=%s, media_base=%s)", target, exists, size, self._media_base
+            )
+        return {"path": str(target), "exists": exists, "size": size, "log": str(logs.path() or "")}
 
     @endpoint
     def open_file(self, path: str) -> None:

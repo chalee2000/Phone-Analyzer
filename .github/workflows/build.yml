@@ -97,3 +97,16 @@ jobs:
         with:
           name: Phone-Analysis-windows
           path: dist/Phone Analysis
+      # Drive the packaged app in its real WebView2 window and check that photos render.
+      - name: UI check in the real window (WebView2)
+        continue-on-error: true
+        timeout-minutes: 12
+        run: |
+          pip install "playwright>=1.45"
+          python scripts/ui_check.py "dist/Phone Analysis/Phone Analysis.exe" ui-check
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ui-check
+          path: ui-check
+          if-no-files-found: ignore
