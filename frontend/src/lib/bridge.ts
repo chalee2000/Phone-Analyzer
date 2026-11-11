@@ -61,9 +61,9 @@ function detect(): Promise<Mode> {
       if (hasApi()) return finish("pywebview");
       window.addEventListener("pywebviewready", () => finish("pywebview"), { once: true });
       poll = window.setInterval(() => hasApi() && finish("pywebview"), 200);
-      window.setTimeout(() => {
-        if (!done) void rpcAvailable().then((yes) => yes && finish("http"));
-      }, 900);
+      // Ask at once: the desktop app's page server never answers /rpc, so this
+      // cannot pick HTTP there, and the development server needs no wait.
+      void rpcAvailable().then((yes) => yes && finish("http"));
     });
   }
   return mode;

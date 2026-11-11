@@ -70,7 +70,7 @@ function Stat({ icon, label, value }: { icon: ReactNode; label: string; value: R
 }
 
 /** LINE's green mark for the LINE-export source. */
-function LineMark({ className = "size-11", icon = "size-5" }: { className?: string; icon?: string }) {
+export function LineMark({ className = "size-11", icon = "size-5" }: { className?: string; icon?: string }) {
   return (
     <span className={clsx("grid shrink-0 place-items-center rounded-2xl bg-[#06c755] text-white shadow-[0_8px_20px_-8px_rgba(6,199,85,0.7)]", className)}>
       <MessageCircle className={icon} strokeWidth={2.4} />

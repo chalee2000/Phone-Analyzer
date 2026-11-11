@@ -169,7 +169,7 @@ def test_chat_limit_stop_and_errors(tmp_path):
     res = cap.run()
     assert res.stopped and [c["title"] for c in res.chats] == ["ก", "ข"] and not res.chats[1]["reached_top"]
     with pytest.raises(CaptureError) as err:
-        Capture(DemoChatApp(), ctx, settle=0, package="messenger").run()  # only LINE is on this phone
+        Capture(DemoChatApp(installed=()), ctx, settle=0, package="messenger").run()  # only LINE is on this phone
     assert err.value.code == "capture_app_missing"
     locked = DemoChatApp()
     locked.resume = "off"  # the app never comes up (a locked screen)

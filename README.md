@@ -37,13 +37,19 @@
 |---|---|
 | ![กำลังบันทึกหน้าจอแชต](docs/screenshots/20-chat-capture.jpg) | ![แชตที่ได้จากการบันทึกหน้าจอ](docs/screenshots/21-chat-capture-result.jpg) |
 
+**เก็บแชต LINE / Messenger ทุกห้องอัตโนมัติ (Android ไม่ต้อง root)**
+
+| | |
+|---|---|
+| ![เลือกแอปและเริ่มเก็บทุกห้อง](docs/screenshots/22-capture-all-chats.jpg) | ![สรุปผลรายห้อง](docs/screenshots/23-capture-all-chats-done.jpg) |
+
 ## ความสามารถ
 
 | หมวด | Android (ADB, ไม่ต้อง root) | iPhone (backup) |
 |---|---|---|
 | ข้อมูลเครื่อง | ยี่ห้อ รุ่น Android build serial แบตเตอรี่ พื้นที่ บัญชี | รุ่น iOS serial IMEI เบอร์ แบตเตอรี่ พื้นที่ |
 | ประวัติการโทร / รายชื่อ / SMS | `content query` ถ้าเครื่องปฏิเสธ ใช้แอปตัวช่วยชั่วคราว (Android 10+) | CallHistory, AddressBook, sms.db (รวม iMessage) |
-| แชต | LINE จากไฟล์ส่งออกแชตในเครื่อง + บันทึกหน้าจอแชตอัตโนมัติ (ฐานข้อมูลแอปต้อง root); Messenger นำเข้าจากไฟล์ Facebook | WhatsApp, LINE (ข้อความทุกประเภท + รูป / วิดีโอ / เสียงที่อยู่ในเครื่อง) |
+| แชต | LINE / Messenger: เก็บทุกห้องแชตอัตโนมัติจากหน้าจอ (ฐานข้อมูลแอปต้อง root) + ไฟล์ส่งออกแชต LINE ในเครื่อง; Messenger นำเข้าจากไฟล์ Facebook ได้ด้วย | WhatsApp, LINE (ข้อความทุกประเภท + รูป / วิดีโอ / เสียงที่อยู่ในเครื่อง) |
 | ประวัติเว็บ / บันทึก | ต้อง root / ไม่มีในระบบ | Safari, Apple Notes |
 | บันทึกเสียง | ไฟล์จาก Recorder / MIUI / Call | Voice Memos |
 | Wi-Fi / SIM | `cmd wifi`, siminfo (SIM ที่เคยใส่) | wifi plist, ICCID / IMSI |
@@ -72,11 +78,32 @@
 * **รูป / วิดีโอ / เสียงของ LINE:**
   * ดึงจาก `Pictures/LINE`, `Movies/LINE` … และโฟลเดอร์ของแอปใน `Android/data` เมื่อเครื่องอนุญาต (ไฟล์ไม่มีนามสกุล ระบบอ่านชนิดไฟล์จากเนื้อไฟล์)
   * แสดงในแท็บรูปภาพแยกอัลบั้ม วิดีโอและเสียงเปิดเล่นได้
-* **บันทึกหน้าจอแชตอัตโนมัติ** (แท็บ แชต → บันทึกหน้าจอแชต):
-  * เปิดห้องแชตบนเครื่อง แล้วโปรแกรมทำซ้ำ: เก็บภาพหน้าจอ → อ่านข้อความด้วย uiautomator → เลื่อนย้อนขึ้น จนถึงข้อความแรก
+* **บันทึกหน้าจอแชต** (แท็บ แชต → บันทึกหน้าจอแชต): เก็บทุกห้องอัตโนมัติ หรือเฉพาะห้องที่เปิดอยู่ (ดูหัวข้อถัดไป)
+  * ทำซ้ำ: เก็บภาพหน้าจอ → อ่านข้อความด้วย uiautomator → เลื่อนย้อนขึ้น จนถึงข้อความแรก
   * ได้แชตพร้อมเวลา ฝั่งส่ง/รับ และรูปที่ตัดจากหน้าจอ
   * ภาพหน้าจอทุกหน้าเก็บพร้อม SHA-256 และทุกคำสั่งบันทึกใน audit log
-  * ใช้กับ Messenger และแอปแชตอื่นได้ด้วย
+
+### เก็บแชต LINE / Messenger ทุกห้องอัตโนมัติ (Android ไม่ต้อง root)
+
+Android ไม่ให้โปรแกรมใดอ่านฐานข้อมูลแชตของ LINE / Messenger ถ้าเครื่องไม่ได้ root โปรแกรมจึงเก็บจากหน้าจอแทน โดยควบคุมแอปบนเครื่องเอง:
+
+1. เปิด **โหมดเครื่องบิน** บนมือถือ (สาย USB ยังใช้งานได้) — การเปิดห้องแชตทำให้ข้อความขึ้นว่า "อ่านแล้ว" ถ้าเครื่องต่อเน็ตอยู่
+2. ปลดล็อกหน้าจอ แล้ววางเครื่องไว้ ห้ามแตะระหว่างเก็บ
+3. แท็บ แชต → **บันทึกหน้าจอแชต** → เลือก **ทุกห้องแชต (อัตโนมัติ)** → เลือก LINE หรือ Messenger → **เริ่มเก็บทุกห้อง**
+
+แล้วโปรแกรมจะ:
+
+* เปิดแอป ไปที่หน้ารายการแชต (กดแท็บ "แชท" ให้ถ้าแอปเปิดมาที่หน้าหลัก)
+* เปิดทีละห้องตามรายการ เลื่อนย้อนจนถึงข้อความแรก แล้วกดย้อนกลับไปห้องถัดไป และเลื่อนรายการลงเมื่อห้องบนจอหมด
+* ข้ามแถวที่ไม่ใช่ห้องแชต (เช่นโฆษณา) แล้วกลับเข้าแอปเอง
+* หยุดได้ทุกเมื่อ ห้องที่เก็บแล้วถูกบันทึกไว้ และสรุปผลรายห้อง (จำนวนข้อความ, ถึงข้อความแรกหรือไม่)
+
+ข้อควรรู้:
+
+* โปรแกรมแตะเฉพาะแถวห้องแชต แท็บแชต และปุ่มย้อนกลับ ไม่พิมพ์หรือส่งข้อความใด ๆ ทุกการแตะบันทึกใน audit log
+* ภาพหน้ารายการแชตก็เก็บเป็นหลักฐานด้วย (อัลบั้ม "บันทึกหน้าจอ … : รายการแชต")
+* เก็บซ้ำได้: ห้องที่เก็บครบถึงข้อความแรกจะแทนของเดิม ไม่ซ้ำ
+* หน้าตาแอปแต่ละเวอร์ชันต่างกัน ถ้าโปรแกรมหาแถวห้องแชตไม่เจอ ให้ส่งไฟล์ `%APPDATA%\Phone Analysis\logs\app.log` กับโฟลเดอร์ `media/capture` ของคดีมาเพื่อปรับ
 
 ### LINE บน iPhone (จาก backup)
 
@@ -204,6 +231,9 @@ link chart, hashes, audit log, signature block), Word, Excel, searchable HTML or
 manifest and SHA256SUMS; every report's hash is written to the case audit log. An animated, brand-specific
 connection guide helps examiners enable USB debugging. Facebook Messenger chats, which a phone without root cannot
 expose, are imported from the account's "Download Your Information" JSON export and the secure-storage download of
-end-to-end encrypted chats, with Thai text repaired, attached photos, and the source files' SHA-256 in the audit log. Demo devices with synthetic Thai data allow training without a phone. Run `python -m spni --demo`
+end-to-end encrypted chats, with Thai text repaired, attached photos, and the source files' SHA-256 in the audit log. On Android
+without root, LINE and Messenger chats can also be captured from the screen: the program drives the app, opens every chat
+in turn, scrolls it back to the first message and rebuilds the conversation from screenshots and the uiautomator view
+hierarchy (every tap is audited; airplane mode is advised so chats are not marked as read). Demo devices with synthetic Thai data allow training without a phone. Run `python -m spni --demo`
 after building the UI, or see *Development* above. The GitHub Actions workflow runs the tests, builds the
 Android helper app and produces the Windows build.

@@ -213,10 +213,12 @@ class DemoChatApp:
     serial = "demo-capture"
 
     def __init__(self, package: str = PKG, titles: list[str] | None = None, seed: int = 4200,
-                 row_h: int = 150, today: date | None = None, ad_at: int | None = 2) -> None:
+                 row_h: int = 150, today: date | None = None, ad_at: int | None = 2,
+                 installed: tuple[str, ...] = (PKG, MESSENGER)) -> None:
         from ..demo import SHARED_PEOPLE
 
         self.package = package
+        self.installed = tuple(dict.fromkeys((package, *installed, LAUNCHER, BROWSER)))
         self.messenger = package == MESSENGER
         names = titles or [p[1] for p in SHARED_PEOPLE] + GROUPS
         self.chats = [DemoChatPhone(title=t, seed=seed + i * 31, today=today, package=package, desc_only=self.messenger)
@@ -357,7 +359,7 @@ class DemoChatApp:
             return f"UI hierchary dumped to: {path}"
         if cmd.startswith("pm list packages"):
             want = cmd.split()[-1] if len(cmd.split()) > 3 else ""
-            return "\n".join(f"package:{p}" for p in (self.package, LAUNCHER, BROWSER) if p.startswith(want))
+            return "\n".join(f"package:{p}" for p in self.installed if p.startswith(want))
         m = re.match(r"monkey -p (\S+)", cmd)
         if m:
             if m.group(1) == self.package and self.screen in ("off", "browser"):
