@@ -59,6 +59,8 @@ export interface ScannedDevice {
 
 /** An iPhone that only needs the examiner to tap "Trust" (pairing is requested on connect). */
 export const canRequestTrust = (d: ScannedDevice) => d.platform === "ios" && (d.state === "not_trusted" || d.state === "locked");
+/** Connecting an iPhone pairs if needed and reports the real error, so it is always worth a try. */
+export const canTryConnect = (d: ScannedDevice) => d.state === "ready" || (d.platform === "ios" && !d.demo);
 
 export interface ConnectedDevice {
   id: string;

@@ -7,7 +7,7 @@ import { PhoneMockup } from "../components/PhoneMockup";
 import { Badge, Button } from "../components/ui";
 import { useI18n } from "../lib/i18n";
 import { useStore } from "../lib/store";
-import { canRequestTrust } from "../lib/types";
+import { canRequestTrust, canTryConnect } from "../lib/types";
 
 function ConnectScreen() {
   const { lang } = useI18n();
@@ -173,12 +173,12 @@ export function ConnectView() {
                   <Button
                     size="sm"
                     variant={d.state === "ready" ? "primary" : canRequestTrust(d) ? "gold" : "outline"}
-                    disabled={!(d.state === "ready" || canRequestTrust(d)) || (!!connecting && connecting !== d.id)}
+                    disabled={!canTryConnect(d) || (!!connecting && connecting !== d.id)}
                     loading={connecting === d.id}
                     onClick={() => void connect(d.id)}
                     data-testid={`connect-${d.id}`}
                   >
-                    {t(d.state !== "ready" && canRequestTrust(d) ? "connect.trust" : "connect.connect")} <ChevronRight className="size-4" />
+                    {t(d.state === "ready" ? "connect.connect" : canRequestTrust(d) ? "connect.trust" : "connect.retry")} <ChevronRight className="size-4" />
                   </Button>
                 </div>
                 {connecting === d.id && canRequestTrust(d) && (

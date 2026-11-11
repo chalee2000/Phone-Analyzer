@@ -150,19 +150,22 @@ def test_iphone_states_from_the_scan(monkeypatch):
         "B": exceptions.InvalidHostIDError(),
         "C": exceptions.PasswordRequiredError(),
         "D": ConnectionResetError("usbmux went away"),
-        "E": None,  # paired and trusted
-        "F": False,  # a pair record the phone no longer accepts
+        "E": True,  # trusted: the client opened a session while being created
+        "F": False,  # no pair record, or one the phone no longer accepts
+        "G": exceptions.SessionActiveError("A lockdown session is already active.", "G", "26.1"),
     }
 
     class Lockdown:
-        def __init__(self, valid: bool) -> None:
-            self.valid = valid
+        def __init__(self, paired: bool) -> None:
+            self.paired = paired
 
         async def get_value(self, key=None, domain=None):
             return {"ProductType": "iPhone15,4", "DeviceName": "iPhone ของสมชาย"}[key]
 
-        async def validate_pairing(self):
-            return self.valid
+        async def validate_pairing(self):  # like the real phone: a second StartSession is refused
+            if self.paired:
+                raise exceptions.SessionActiveError("A lockdown session is already active.", "E", "26.1")
+            return False
 
         async def close(self):
             pass
@@ -175,12 +178,12 @@ def test_iphone_states_from_the_scan(monkeypatch):
         out = outcomes[serial]
         if isinstance(out, Exception):
             raise out
-        return Lockdown(out is None)
+        return Lockdown(out)
 
     monkeypatch.setattr(usbmux, "list_devices", list_devices)
     monkeypatch.setattr(lockdown, "create_using_usbmux", create)
     found = {d["serial"]: d for d in device.list_devices()}
     assert {k: v["state"] for k, v in found.items()} == {
-        "A": "not_trusted", "B": "not_trusted", "C": "locked", "D": "error", "E": "ready", "F": "not_trusted"}
+        "A": "not_trusted", "B": "not_trusted", "C": "locked", "D": "error", "E": "ready", "F": "not_trusted", "G": "ready"}
     assert found["D"]["detail"].startswith("ConnectionResetError: usbmux went away")
     assert found["E"]["model"] == "iPhone 15" and found["E"]["name"] == "iPhone ของสมชาย"

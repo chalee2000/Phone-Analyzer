@@ -48,7 +48,7 @@ async def _list_devices() -> list[dict[str, Any]]:
     here and stays connectable.
     """
     from pymobiledevice3 import usbmux
-    from pymobiledevice3.exceptions import InvalidHostIDError, NotPairedError, PasswordRequiredError
+    from pymobiledevice3.exceptions import InvalidHostIDError, NotPairedError, PasswordRequiredError, SessionActiveError
     from pymobiledevice3.lockdown import create_using_usbmux
 
     out = []
@@ -58,14 +58,19 @@ async def _list_devices() -> list[dict[str, Any]]:
         entry = {"id": f"ios:{dev.serial}", "platform": "ios", "serial": dev.serial, "state": "ready",
                  "brand": "Apple", "model": "iPhone", "name": ""}
         try:
+            # Creating the client already validates the pairing and starts a session when the
+            # iPhone trusts this computer (``paired``); validating again is refused with
+            # SessionActiveError, so read the result instead.
             lockdown = await create_using_usbmux(serial=dev.serial, autopair=False)
             try:
                 entry["model"] = marketing_name(await lockdown.get_value(key="ProductType") or "")
                 entry["name"] = await lockdown.get_value(key="DeviceName") or ""
-                if not await lockdown.validate_pairing():
+                if not getattr(lockdown, "paired", False):
                     entry["state"] = "not_trusted"
             finally:
                 await lockdown.close()
+        except SessionActiveError:  # a session is open: the pairing was accepted
+            entry["state"] = "ready"
         except (NotPairedError, InvalidHostIDError):  # never paired, or the trust was reset on the phone
             entry["state"] = "not_trusted"
         except PasswordRequiredError:
