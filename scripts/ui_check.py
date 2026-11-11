@@ -95,23 +95,49 @@ def main() -> int:
         page = Page(target["webSocketDebuggerUrl"])
         page.call("Runtime.enable")
         page.wait(READY, 90)
-        page.eval("(async () => { await window.pywebview.api.connect('demo:android');"
-                  " return await window.pywebview.api.start_extraction({kinds: ['photos', 'contacts']}); })()")
+        brief = "(r => ({ok: r && r.ok, error: r && r.error, message: r && r.message}))"
+        result["connect"] = page.eval(f"window.pywebview.api.connect('demo:android').then({brief})")
+        result["start"] = page.eval(f"window.pywebview.api.start_extraction({{kinds: ['photos', 'contacts']}}).then({brief})")
+        state = None
         for _ in range(240):
-            if not page.eval("(async () => (await window.pywebview.api.state()).data.running)()"):
+            state = page.eval("window.pywebview.api.state()")
+            if not (state or {}).get("data", {}).get("running"):
                 break
             time.sleep(1)
+        data = (state or {}).get("data") or {}
+        result["state"] = {
+            "running": data.get("running"),
+            "counts": data.get("counts"),
+            "extraction": (data.get("extraction") or {}).get("status"),
+            "unavailable": (data.get("extraction") or {}).get("unavailable"),
+        }
         page.call("Page.reload")
         time.sleep(3)
         page.wait(READY, 90)
         time.sleep(2)
         page.wait("!!document.querySelector('[data-testid=tab-photos]')", 30)
         page.eval("document.querySelector('[data-testid=tab-photos]').click()")
-        time.sleep(6)
+        # Wait for the grid's pictures (or for the tab to settle on an empty / unavailable page).
+        for _ in range(45):
+            if page.eval("document.querySelectorAll('[data-testid=photo-grid] img, [data-testid=photo-broken]').length"):
+                break
+            time.sleep(1)
+        # Bring every lazy picture into view so each one is actually requested.
+        page.eval("""(async () => {
+            const g = document.querySelector('[data-testid=photo-grid]');
+            if (!g) return;
+            for (let y = 0; y <= g.scrollHeight; y += 400) { g.scrollTop = y; await new Promise(r => setTimeout(r, 150)); }
+            g.scrollTop = 0;
+        })()""")
+        time.sleep(3)
         grid = page.eval("""(() => {
             const imgs = [...document.querySelectorAll('[data-testid=photo-grid] img')];
+            const main = document.querySelector('main') || document.body;
             return {total: imgs.length, loaded: imgs.filter(i => i.complete && i.naturalWidth > 0).length,
-                    broken: document.querySelectorAll('[data-testid=photo-broken]').length, src: imgs[0] ? imgs[0].src : ''};
+                    broken: document.querySelectorAll('[data-testid=photo-broken]').length, src: imgs[0] ? imgs[0].src : '',
+                    tiles: document.querySelectorAll('[data-testid=photo-grid] button').length,
+                    tab: (document.querySelector('[role=tab][aria-selected=true]') || {}).textContent || '',
+                    text: (main.innerText || '').slice(0, 300)};
         })()""")
         if grid["src"]:
             grid["fetch"] = page.eval(
