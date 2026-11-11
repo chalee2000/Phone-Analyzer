@@ -22,7 +22,7 @@ from typing import Any
 
 from .case.store import Case
 from .models import ALL_KINDS, CallRecord, SmsMessage
-from .util import normalize_phone
+from .util import local_ms, normalize_phone
 
 ALIASES: dict[str, list[str]] = {
     "a": ["a_number", "anumber", "a_no", "calling", "calling_number", "caller", "msisdn", "origin", "from", "source",
@@ -183,7 +183,7 @@ def parse(name: str, data: bytes) -> dict[str, Any]:
         else:
             out = a == target
         other = b if a == target else a
-        ts = int(dt.timestamp() * 1000)
+        ts = local_ms(dt)
         if "sms" in rtype:
             sms.append(SmsMessage(address=other, body="", direction="out" if out else "in", timestamp=ts, thread=other, service="SMS"))
             continue

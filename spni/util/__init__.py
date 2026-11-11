@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import re
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 # Seconds between the Unix epoch (1970) and the Apple/Cocoa epoch (2001-01-01).
@@ -13,6 +13,26 @@ COCOA_EPOCH_OFFSET = 978_307_200
 
 def now_ms() -> int:
     return int(datetime.now(timezone.utc).timestamp() * 1000)
+
+
+def local_ms(dt: datetime) -> int:
+    """Milliseconds since 1970 for a date/time (naive values are local time).
+
+    Windows' C runtime cannot convert local times before (or within a day of)
+    1970 and raises ``OSError: [Errno 22]``; Android reports such dates for
+    preinstalled apps, and cameras with an unset clock write them into EXIF.
+    """
+    try:
+        return int(dt.timestamp() * 1000)
+    except (OSError, OverflowError, ValueError):
+        return _local_ms_fallback(dt)
+
+
+def _local_ms_fallback(dt: datetime) -> int:
+    if dt.tzinfo is not None:
+        return int((dt - datetime(1970, 1, 1, tzinfo=timezone.utc)).total_seconds() * 1000)
+    offset = datetime.now().astimezone().utcoffset() or timedelta(0)
+    return int(((dt - datetime(1970, 1, 1)) - offset).total_seconds() * 1000)
 
 
 def iso_now() -> str:

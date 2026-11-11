@@ -31,6 +31,7 @@ from pathlib import Path
 from typing import Any
 
 from .models import ChatMessage
+from .util import local_ms
 
 APP = "LINE"
 ME = "ฉัน"
@@ -227,7 +228,7 @@ def parse_text(name: str, text: str) -> ExportChat:
             elif len(body) > 1 and body.startswith('"') and body.endswith('"') and "\n" not in body:
                 body = body[1:-1]
             ts = day.replace(hour=_hour(int(hh), ampm, prefix) % 24, minute=int(mm))
-            chat.messages.append({"ts": int(ts.timestamp() * 1000), "sender": sender.strip(), "body": body})
+            chat.messages.append({"ts": local_ms(ts), "sender": sender.strip(), "body": body})
             continue
         if not line.strip() or SAVED.match(line.strip()):
             continue

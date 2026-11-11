@@ -25,7 +25,7 @@ from ..extract import BaseExtractor, ExtractionContext
 from ..media import AUDIO_EXTS, IMAGE_EXTS, VIDEO_EXTS, media_kind, sniff_bytes
 from .. import line_export
 from ..models import App, CallRecord, ChatMessage, Contact, DeviceInfo, Photo, SimCard, SmsMessage, Unavailable, VoiceMemo, WifiNetwork
-from ..util import normalize_phone, safe_name, unix_to_ms
+from ..util import local_ms, normalize_phone, safe_name, unix_to_ms
 from . import agent as agent_mod
 from .adb import AuditedTransport, Transport
 from .content import ContentQueryError, as_int, build_query, parse_rows
@@ -154,8 +154,8 @@ def _parse_pkg_time(value: str) -> int | None:
     from datetime import datetime
 
     try:
-        return int(datetime.strptime(value.strip(), "%Y-%m-%d %H:%M:%S").timestamp() * 1000)
-    except ValueError:
+        return local_ms(datetime.strptime(value.strip(), "%Y-%m-%d %H:%M:%S"))
+    except (ValueError, OSError, OverflowError):
         return None
 
 

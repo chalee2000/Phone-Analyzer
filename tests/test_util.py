@@ -35,3 +35,23 @@ def test_thai_wrap_keeps_clusters_together():
     for line in lines[1:]:
         assert ord(line[0]) not in COMBINING and ord(line[0]) not in FOLLOWING
     assert all(len(line) * 4.0 <= 60 for line in lines)
+
+
+def test_local_ms_matches_python_and_survives_1970(monkeypatch):
+    """Windows raises OSError for local times near 1970; the fallback must give the same value."""
+    import time
+    from datetime import datetime, timezone
+
+    from spni.util import _local_ms_fallback, local_ms
+
+    monkeypatch.setenv("TZ", "Asia/Bangkok")
+    time.tzset()
+    try:
+        for dt in (datetime(1960, 5, 1, 12), datetime(1970, 1, 1, 7), datetime(1970, 1, 1), datetime(2026, 11, 11, 15, 56)):
+            assert _local_ms_fallback(dt) == local_ms(dt) == int(dt.timestamp() * 1000)
+        assert local_ms(datetime(1970, 1, 1, 7)) == 0  # Android's "installed at epoch" in UTC+7
+        aware = datetime(1969, 12, 31, tzinfo=timezone.utc)
+        assert _local_ms_fallback(aware) == local_ms(aware) == -86_400_000
+    finally:
+        monkeypatch.delenv("TZ")
+        time.tzset()

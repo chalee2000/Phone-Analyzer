@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Any, Iterator
 
 from ..models import CallRecord, ChatMessage, Contact, Note, SmsMessage, VoiceMemo, WebVisit, WifiNetwork
-from ..util import cocoa_to_ms, normalize_phone, unix_to_ms
+from ..util import cocoa_to_ms, local_ms, normalize_phone, unix_to_ms
 
 # (domain, relativePath) of the databases we read.
 SMS_DB = ("HomeDomain", "Library/SMS/sms.db")
@@ -300,7 +300,7 @@ def _ssid(value: Any) -> str:
 
 def _date_ms(value: Any) -> int | None:
     if hasattr(value, "timestamp"):
-        return int(value.timestamp() * 1000)
+        return local_ms(value)
     return None
 
 

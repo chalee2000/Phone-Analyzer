@@ -217,6 +217,23 @@ def test_wifi_and_packages_parsers():
     assert apps[1].system and not apps[0].system
 
 
+def test_packages_with_1970_install_time():
+    """Xiaomi lists preinstalled apps as installed at the epoch (local time)."""
+    out = """  Package [com.miui.home] (8f1e2a):
+    versionName=4.39.9
+    firstInstallTime=1970-01-01 07:00:00
+    lastUpdateTime=1969-12-31 23:59:59
+    pkgFlags=[ SYSTEM HAS_CODE ]
+  Package [jp.naver.line.android] (77aa01):
+    versionName=15.18.1
+    firstInstallTime=2025-03-02 10:11:12
+"""
+    apps = {a.package: a for a in parse_dumpsys_packages(out)}
+    assert apps["com.miui.home"].system and isinstance(apps["com.miui.home"].installed, int)
+    assert isinstance(apps["com.miui.home"].updated, int)
+    assert apps["jp.naver.line.android"].version == "15.18.1" and apps["jp.naver.line.android"].installed > 0
+
+
 def test_parcel_imei():
     out = """Result: Parcel(
   0x00000000: 00000000 0000000f 00350033 00370036 '........3.5.6.7.'

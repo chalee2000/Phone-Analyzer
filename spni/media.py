@@ -8,6 +8,8 @@ from typing import Any
 
 from PIL import ExifTags, Image, ImageOps
 
+from .util import local_ms
+
 IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".heic", ".heif", ".webp", ".gif", ".bmp", ".dng"}
 VIDEO_EXTS = {".mp4", ".mov", ".3gp", ".mkv", ".avi", ".m4v"}
 AUDIO_EXTS = {".m4a", ".mp3", ".aac", ".amr", ".wav", ".ogg", ".opus", ".3ga"}
@@ -64,8 +66,8 @@ def read_exif(path: Path) -> dict[str, Any]:
             if stamp:
                 try:
                     dt = datetime.strptime(str(stamp).strip("\x00 "), "%Y:%m:%d %H:%M:%S")
-                    out["taken"] = int(dt.timestamp() * 1000)
-                except ValueError:
+                    out["taken"] = local_ms(dt)
+                except (ValueError, OSError, OverflowError):
                     pass
             try:
                 gps = exif.get_ifd(_GPS_TAG)

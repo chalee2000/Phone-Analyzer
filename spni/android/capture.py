@@ -32,6 +32,7 @@ from typing import Any, Callable
 from PIL import Image
 
 from ..models import ChatMessage, Photo
+from ..util import local_ms
 
 APPS = {
     "jp.naver.line.android": "LINE",
@@ -292,7 +293,7 @@ def to_messages(items: list[Item], app: str, thread: str, today: date) -> list[C
         if it.kind == "time":
             hm = _clock(it.text)
             if hm and cur:
-                ts = int(datetime(cur.year, cur.month, cur.day, *hm).timestamp() * 1000)
+                ts = local_ms(datetime(cur.year, cur.month, cur.day, *hm))
                 for msg in untimed:
                     if msg.timestamp is None:
                         msg.timestamp = ts
