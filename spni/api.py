@@ -766,17 +766,19 @@ class Api:
         return out
 
     # ── chat screen capture (Android, no root) ───────────────────────────
-    def _capture_transport(self) -> Any:
+    def _capture_transport(self, package: str = "") -> Any:
         dev = self._device
         if not dev or dev.get("offline") or dev["info"].get("platform") != "android":
             raise ApiError("capture_needs_android")
         if dev.get("demo"):
             import random
 
-            from .android.capture_demo import DemoChatPhone
+            from .android.capture_demo import DemoChatApp, DemoChatPhone
             from .demo import SHARED_PEOPLE
 
             rng = random.Random()
+            if package:
+                return DemoChatApp(package=package, seed=rng.randint(1, 10**6))
             return DemoChatPhone(title=rng.choice(SHARED_PEOPLE)[1], seed=rng.randint(1, 10**6))
         raw = getattr(self._extractor, "raw", None)
         if raw is None:
@@ -784,17 +786,45 @@ class Api:
         return raw
 
     @endpoint
+    def capture_apps(self) -> list[dict[str, Any]]:
+        """The chat apps "capture all chats" can drive, and whether each is on the phone."""
+        from .android.capture import APPS, CHAT_APPS
+
+        transport = self._capture_transport(CHAT_APPS["line"])
+        try:
+            listing = set(transport.shell("pm list packages", timeout=60).split())
+        except Exception as exc:  # the dialog still opens; the start checks again
+            logging.getLogger("spni.capture").warning("pm list packages failed: %s", exc)
+            listing = None
+        return [{"key": key, "package": pkg, "name": APPS.get(pkg, pkg),
+                 "installed": None if listing is None else f"package:{pkg}" in listing}
+                for key, pkg in CHAT_APPS.items()]
+
+    @endpoint
     def capture_start(self, options: dict[str, Any] | None = None) -> dict[str, Any]:
-        """Screen-capture the chat open on the phone; runs in the background (capture.* events)."""
+        """Screen-capture chats on the phone; runs in the background (capture.* events).
+
+        ``mode="current"`` takes the chat the examiner opened; ``mode="all"``
+        drives ``app`` (``line`` / ``messenger``) and captures every chat, up
+        to ``max_chats``. ``max_pages`` is per chat.
+        """
         from .android.adb import AuditedTransport
-        from .android.capture import Capture
+        from .android.capture import CHAT_APPS, Capture
         from .extract import ExtractionContext
 
         options = options or {}
+        mode = "all" if options.get("mode") == "all" else "current"
+        package = ""
+        if mode == "all":
+            package = CHAT_APPS.get(str(options.get("app") or ""), "")
+            if not package:
+                raise ApiError("capture_app_missing", str(options.get("app")))
         with self._lock:
             if self._job or self._reporting or self._capture:
                 raise ApiError("busy")
-            transport = self._capture_transport()
+            transport = self._capture_transport(package)
+            if package and f"package:{package}" not in transport.shell(f"pm list packages {package}", timeout=60).split():
+                raise ApiError("capture_app_missing", package)
             case = self._ensure_case()
             info = dict(self._device["info"])  # type: ignore[index]
             demo = bool(self._device.get("demo"))  # type: ignore[union-attr]
@@ -813,29 +843,38 @@ class Api:
             ids = {"case_id": case.id, "extraction_id": ext.id}
             cap = Capture(
                 AuditedTransport(transport, ctx.audit), ctx,
-                max_pages=int(options.get("max_pages") or 200), title=str(options.get("title") or ""),
+                max_pages=int(options.get("max_pages") or (60 if package else 200)), title=str(options.get("title") or ""),
                 progress=lambda info_: self._bus.emit("capture.progress", {**info_, **ids}),
-                settle=0.15 if demo else 0.8,
+                settle=0.15 if demo else 0.8, package=package, max_chats=int(options.get("max_chats") or 30),
             )
-            self._capture = {"cap": cap, **ids}
-        ctx.audit("capture.start", f"max_pages={cap.max_pages} title={cap.title_override!r} (examiner opened the chat on the phone)")
+            self._capture = {"cap": cap, "mode": mode, **ids}
+        if package:
+            ctx.audit("capture.start", f"all chats in {package}: max_chats={cap.max_chats} max_pages_per_chat={cap.max_pages}")
+        else:
+            ctx.audit("capture.start", f"max_pages={cap.max_pages} title={cap.title_override!r} (examiner opened the chat on the phone)")
         threading.Thread(target=self._run_capture, args=(cap, ctx, case, ext, ids), daemon=True, name="capture").start()
         self._bus.emit("capture.started", ids)
         return ids
 
     def _run_capture(self, cap: Any, ctx: Any, case: Case, ext: Any, ids: dict[str, str]) -> None:
+        from .android.capture import CaptureError, merge_captured
+
         try:
             res = cap.run()
-            chats = ext.records("chats") + [m.to_dict() for m in res.messages]
-            chats.sort(key=lambda c: c.get("timestamp") or 0, reverse=True)
+            chats = merge_captured(ext.records("chats"), [m.to_dict() for m in res.messages], res.complete)
             photos = ext.records("photos") + [p.to_dict() for p in res.shots + res.pictures]
             ext.set_records("chats", chats)
             ext.set_records("photos", photos)
-            ext.audit("capture.done", f"{res.app} '{res.title}': pages={res.pages} text_pages={res.text_pages} "
-                      f"messages={len(res.messages)} pictures={len(res.pictures)} reached_top={res.reached_top} stopped={res.stopped}")
+            ext.audit("capture.done", f"{res.app} '{res.title}': chats={sum(1 for c in res.chats if not c.get('skipped'))} "
+                      f"pages={res.pages} text_pages={res.text_pages} messages={len(res.messages)} pictures={len(res.pictures)} "
+                      f"reached_top={res.reached_top} stopped={res.stopped}")
             ext.finish("completed")
-            done = {**ids, "pages": res.pages, "messages": len(res.messages), "pictures": len(res.pictures),
-                    "title": res.title, "app": res.app, "reached_top": res.reached_top, "stopped": res.stopped, "text_pages": res.text_pages}
+            done = {**ids, "mode": cap.mode, "pages": res.pages, "messages": len(res.messages), "pictures": len(res.pictures),
+                    "title": res.title, "app": res.app, "reached_top": res.reached_top, "stopped": res.stopped,
+                    "text_pages": res.text_pages, "chats": res.chats, "interrupted": res.interrupted}
+        except CaptureError as exc:
+            ctx.audit("capture.error", str(exc))
+            done = {**ids, "mode": cap.mode, "error": exc.code, "detail": exc.detail}
         except Exception as exc:
             logging.getLogger("spni.capture").exception("capture failed")
             ctx.audit("capture.error", repr(exc))
