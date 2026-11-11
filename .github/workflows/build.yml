@@ -97,9 +97,10 @@ jobs:
         with:
           name: Phone-Analysis-windows
           path: dist/Phone Analysis
-      # Drive the packaged app in its real WebView2 window and check that photos render.
+      # Drive the packaged app in its real WebView2 window and check that photos
+      # render. Required: a failure here means the Windows build shows no
+      # pictures (or an empty window). The ui-check artifact has the screenshot.
       - name: UI check in the real window (WebView2)
-        continue-on-error: true
         timeout-minutes: 12
         env:
           PYTHONIOENCODING: utf-8
