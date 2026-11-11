@@ -306,6 +306,9 @@ export function DiagnosticsDialog() {
         if (r.result === "ok") toast.success(t("diag.fixStarted"));
         else toast.error(t(r.result === "denied" ? "diag.fixDenied" : "diag.fixFailed"));
         await runChecks();
+      } else if (fix === "install_itunes") {
+        await call("install_itunes");
+        toast(t("diag.fixItunesHint"), { duration: 15000 });
       } else {
         await call("install_apple_devices");
         toast(t("diag.fixInstallHint"), { duration: 12000 });
@@ -470,7 +473,7 @@ export function DiagnosticsDialog() {
                       onClick={() => void runFix(c.fix!)}
                       data-testid={`diag-fix-${c.fix}`}
                     >
-                      {t(c.fix === "start_apple_service" ? "diag.fixStart" : "diag.fixInstall")}
+                      {t({ start_apple_service: "diag.fixStart", install_apple_devices: "diag.fixInstall", install_itunes: "diag.fixItunes" }[c.fix])}
                     </Button>
                   )
                 }

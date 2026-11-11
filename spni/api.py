@@ -562,6 +562,13 @@ class Api:
         return {"result": "failed", "state": state}
 
     @endpoint
+    def install_itunes(self) -> None:
+        """Open Apple's iTunes download (for Windows too old for the Store's Apple Devices app)."""
+        import webbrowser
+
+        webbrowser.open(diagnostics.ITUNES_URL)
+
+    @endpoint
     def install_apple_devices(self) -> None:
         """Open Apple Devices (iPhone driver and service) in the Microsoft Store."""
         if sys.platform == "win32":

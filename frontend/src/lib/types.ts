@@ -231,7 +231,7 @@ export interface DiagnosticCheck {
   id: string;
   status: "ok" | "warn" | "fail" | "info";
   detail: string;
-  fix?: "start_apple_service" | "install_apple_devices";
+  fix?: "start_apple_service" | "install_apple_devices" | "install_itunes";
 }
 
 export interface StepEvent {

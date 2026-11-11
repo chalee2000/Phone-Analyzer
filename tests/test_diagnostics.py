@@ -61,3 +61,12 @@ def test_ios_checklist_offers_the_right_fix(monkeypatch):
     store_name = _ios(monkeypatch, {"sc:Apple Mobile Device Service": MISSING, "sc:AppleMobileDeviceService": RUNNING}, usbmux=True)
     assert store_name["apple_service"]["status"] == "ok" and store_name["apple_service"]["detail"] == "AppleMobileDeviceService"
     assert "apple_usb" not in store_name and "apple_usb_missing" not in store_name  # pnputil gave nothing: no claim
+
+
+def test_old_windows_gets_itunes_instead_of_the_store_app(monkeypatch):
+    outputs = {"sc:Apple Mobile Device Service": MISSING, "sc:AppleMobileDeviceService": MISSING}
+    monkeypatch.setattr(diagnostics, "windows_build", lambda: 19041)  # Windows 10 2004: the Store refuses Apple Devices
+    old = _ios(monkeypatch, outputs)
+    assert old["apple_service_missing"]["fix"] == "install_itunes" and "19041" in old["apple_service_missing"]["detail"]
+    monkeypatch.setattr(diagnostics, "windows_build", lambda: 22631)  # Windows 11 23H2
+    assert _ios(monkeypatch, outputs)["apple_service_missing"]["fix"] == "install_apple_devices"

@@ -29,6 +29,15 @@ def check(id_: str, status: str, detail: str = "", fix: str = "") -> dict[str, A
 # The service of iTunes / the Apple Devices app; the Store package may register the short name.
 APPLE_SERVICES = ("Apple Mobile Device Service", "AppleMobileDeviceService")
 APPLE_VID = "VID_05AC"  # Apple's USB vendor id
+APPLE_DEVICES_MIN_BUILD = 19045  # the Store's Apple Devices app needs Windows 10 22H2 or later
+ITUNES_URL = "https://www.apple.com/itunes/download/win64"  # iTunes from Apple: also for older Windows 10
+
+
+def windows_build() -> int:
+    try:
+        return int(sys.getwindowsversion().build)  # type: ignore[attr-defined]
+    except (AttributeError, ValueError):
+        return 0
 
 
 def apple_service_state(sc_output: str) -> str:
@@ -92,7 +101,11 @@ def ios_checks() -> list[dict[str, Any]]:
         if state in ("running", "starting"):
             out.append(check("apple_service", "ok", name))
         elif state == "missing":
-            out.append(check("apple_service_missing", "fail", fix="install_apple_devices"))
+            build = windows_build()
+            if build and build < APPLE_DEVICES_MIN_BUILD:  # the Store refuses Apple Devices here: iTunes from apple.com
+                out.append(check("apple_service_missing", "fail", f"Windows build {build}", fix="install_itunes"))
+            else:
+                out.append(check("apple_service_missing", "fail", fix="install_apple_devices"))
         elif state == "stopped":
             out.append(check("apple_service_stopped", "warn", name, fix="start_apple_service"))
         else:
